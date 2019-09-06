@@ -158,3 +158,39 @@ class AttentionSentRNN(nn.Module):
             return Variable(torch.zeros(2, self.batch_size, self.sent_gru_hidden))
         else:
             return Variable(torch.zeros(1, self.batch_size, self.sent_gru_hidden))
+
+
+class HAN(nn.Module):
+
+        def __init__(self, batch_size, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True):
+            super(AttentionSentRNN, self).__init__()
+
+            self.batch_size = batch_size
+            self.sent_gru_hidden = sent_gru_hidden
+            self.n_classes = n_classes
+            self.word_gru_hidden = word_gru_hidden
+            self.bidirectional = bidirectional
+
+            self.sent_encoder = AttentionWordRNN(batch_size, num_tokens, embed_size, word_gru_hidden, bidirectional)
+            self.doc_encoder = AttentionSentRNN(batch_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional)
+
+        def set_embedding(self, embed_table):
+            self.embed.load_state_dict({'weight': torch.tensor(embed_table)})
+
+        def forward(self, sents, sents_len, doc_lens):
+
+            # Account for batch size
+            B = sents.size()[1]
+            b = self.batch_size
+
+
+            sen_encodings = [self.sent_encoder(sents[:,i*b:(i+1)*b,:]) for i in range(B // b)]
+
+
+            for i in range(B // b): # Piecewise embed sentences to avoid memory overflow
+
+
+                sen_encodings.append(self.sent_encoder(sents[:,i*b:(i+1)*b,:]))
+
+            sen_encodings = torch.cat
+            None

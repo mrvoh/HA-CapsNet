@@ -101,13 +101,14 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 
 		tags = [label_to_idx[tag] for tag in doc.tags]
 		sents = [[_convert_word_to_idx(w, word_to_idx) for w in sent] for sent in doc.sentences]
-		sen_lens = [len(sen) for sen in sents]
-		tokens = [tok for sent in sents for tok in sent] # flatten list
+		# sen_lens = [len(sen) for sen in sents]
+		# tokens = [tok for sent in sents for tok in sent] # flatten list
 
 		# convert to tensors
 		sample['tags'] = torch.LongTensor(tags)
-		sample['sen_lens'] = torch.LongTensor(sen_lens)
-		sample['tokens'] = torch.LongTensor(tokens)
+		sample['sents'] = torch.LongTensor(sents)
+		# sample['sen_lens'] = torch.LongTensor(sen_lens)
+		# sample['tokens'] = torch.LongTensor(tokens)
 
 		dset.append(sample)
 
@@ -118,22 +119,39 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 # Collate function
 
 def collate_fn(batch):
-	tokens_batch, _ = stack_and_pad_tensors([seq['tokens'] for doc in batch])
+
+	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
+	doc_lens_batch = torch.LongTensor([len(doc['sents']) for doc in batch])
+
+
+	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
 	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
-	sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
+	# sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
 	# word_len_batch, _ = stack_and_pad_tensors([seq['word_len'] for seq in batch])
 
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-	tokens_batch = tokens_batch.to(device)
-	sents_len_batch =sents_len_batch.to(device)
+	sents_batch = sents_batch.to(device)
+	sents_len_batch = sents_len_batch.to(device)
+	doc_lens_batch = doc_lens_batch.to(device)
 	tags_batch = tags_batch.to(device)
 
 	# PyTorch RNN requires batches to be transposed for speed and integration with CUDA
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(tokens_batch), transpose(sents_len_batch), transpose(tags_batch))
+	return (transpose(sents_batch), transpose(sents_len_batch), transpose(doc_lens_batch), transpose(tags_batch))
 
 
 
 # Get dataloader
+def get_data_loader(data, batch_size, drop_last, collate_fn=collate_fn):
+    sampler = BucketBatchSampler(data,
+                                 batch_size,
+                                 drop_last=drop_last,
+                                 sort_key=lambda row: -max([len(sent) for sent in row['sents']]))
+
+    loader = DataLoader(data,
+                        batch_sampler=sampler,
+                        collate_fn=collate_fn)
+
+    return loader
