@@ -1,11 +1,14 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from math import ceil
 
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+
+from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 
 
 # ## Functions to accomplish attention
@@ -83,23 +86,23 @@ class AttentionWordRNN(nn.Module):
             self.bias_word = nn.Parameter(torch.Tensor(word_gru_hidden,1))
             self.weight_proj_word = nn.Parameter(torch.Tensor(word_gru_hidden, 1))
             
-        self.softmax_word = nn.Softmax()
+        self.softmax_word = nn.Softmax(dim=0)
         self.weight_W_word.data.uniform_(-0.1, 0.1)
         self.weight_proj_word.data.uniform_(-0.1,0.1)
 
         
         
-    def forward(self, embed, state_word):
+    def forward(self, embed):
         # embeddings
         embedded = self.lookup(embed)
         # word level gru
-        output_word, state_word = self.word_gru(embedded, state_word)
+        output_word, _ = self.word_gru(embedded)
 #         print output_word.size()
         word_squish = batch_matmul_bias(output_word, self.weight_W_word,self.bias_word, nonlinearity='tanh')
         word_attn = batch_matmul(word_squish, self.weight_proj_word)
         word_attn_norm = self.softmax_word(word_attn.transpose(1,0))
         word_attn_vectors = attention_mul(output_word, word_attn_norm.transpose(1,0))        
-        return word_attn_vectors, state_word, word_attn_norm
+        return word_attn_vectors, word_attn_norm
     
     def init_hidden(self):
         if self.bidirectional == True:
@@ -128,7 +131,7 @@ class AttentionSentRNN(nn.Module):
         if bidirectional == True:
             self.sent_gru = nn.GRU(2 * word_gru_hidden, sent_gru_hidden, bidirectional= True)
 
-            self.U = nn.Parameter(torch.Tensor(2*sent_gru_hidden, n_classes))
+            self.U = nn.Linear(2*sent_gru_hidden, n_classes)
             self.out = nn.Linear(2*sent_gru_hidden, n_classes) # nn.Parameter(torch.Tensor(2*sent_gru_hidden, n_classes))
             # self.weight_W_sent = nn.Parameter(torch.Tensor(2* sent_gru_hidden ,2* sent_gru_hidden))
             # self.bias_sent = nn.Parameter(torch.Tensor(2* sent_gru_hidden,1))
@@ -136,7 +139,7 @@ class AttentionSentRNN(nn.Module):
             # self.final_linear = nn.Linear(2* sent_gru_hidden, n_classes)
         else:
             self.sent_gru = nn.GRU(word_gru_hidden, sent_gru_hidden, bidirectional= False)
-            self.U = nn.Parameter(torch.Tensor(sent_gru_hidden, n_classes))
+            self.U = nn.Linear(sent_gru_hidden, n_classes)
             self.out = nn.Linear(sent_gru_hidden, n_classes)
             # self.weight_W_sent = nn.Parameter(torch.Tensor(sent_gru_hidden ,sent_gru_hidden))
             # self.bias_sent = nn.Parameter(torch.Tensor(sent_gru_hidden,1))
@@ -150,19 +153,31 @@ class AttentionSentRNN(nn.Module):
         # self.weight_proj_sent.data.uniform_(-0.1,0.1)
         
         
-    def forward(self, word_attention_vectors, state_sent):
-        output_sent, state_sent = self.sent_gru(word_attention_vectors, state_sent)
+    def forward(self, word_attention_vectors):
+
+        B, N, d_c = word_attention_vectors.size()
+        output_sent, _ = self.sent_gru(word_attention_vectors)
 
         H = output_sent.permute(1,0,2)
         # Get labelwise attention scores per document
         # A: [B, N, L] -> softmax-normalized scores per sentence per label
-        A = self.softmax_sent(H @ self.U)
+        # A1 = H @ self.U
+        A1 = self.U(H)
+        A = self.softmax_sent(A1)
         # Get labelwise representations of doc
-        V = (A * H).sum(dim=1)
+        test = torch.repeat_interleave(A, d_c, dim=2)
+        H_expanded = H.repeat(1,1,self.n_classes)
+
+        V = (test * H_expanded).view(B, N, self.n_classes, d_c).sum(dim=1)
+        # V = (H.contiguous().view(-1) @ test.contiguous().view(-1, self.n_classes))
+        #TODO: labelwise attention can be done more efficiently
         # Get final predictions
         y = self.out(V)
 
-        return y
+        # Take diagonal over predictions per label to cut out mismatches in d_l beta_j for l != j (binary classification per label representation of document)
+
+        y = y.diagonal(dim1=1, dim2=2)
+        return y, A
         # sent_squish = batch_matmul_bias(output_sent, self.weight_W_sent,self.bias_sent, nonlinearity='tanh')
         # sent_attn = batch_matmul(sent_squish, self.weight_proj_sent)
         # sent_attn_norm = self.softmax_sent(sent_attn.transpose(1,0))
@@ -181,7 +196,7 @@ class AttentionSentRNN(nn.Module):
 class HAN(nn.Module):
 
         def __init__(self, batch_size, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True):
-            super(AttentionSentRNN, self).__init__()
+            super(HAN, self).__init__()
 
             self.batch_size = batch_size
             self.sent_gru_hidden = sent_gru_hidden
@@ -193,7 +208,7 @@ class HAN(nn.Module):
             self.doc_encoder = AttentionSentRNN(batch_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional)
 
         def set_embedding(self, embed_table):
-            self.embed.load_state_dict({'weight': torch.tensor(embed_table)})
+            self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
         def forward(self, sents, sents_len, doc_lens):
 
@@ -201,21 +216,16 @@ class HAN(nn.Module):
             B = sents.size()[1]
             b = self.batch_size
 
+            # state_word = self.sent_encoder.init_hidden().cuda()
 
-            sen_encodings = [self.sent_encoder(sents[:,i*b:(i+1)*b,:])[0] for i in range(B // b)]
-            sen_encodings = torch.cat(sen_encodings) #TODO: check
+
+            sen_encodings = [self.sent_encoder(sents[:,i*b:(i+1)*b])[0] for i in range(ceil(B / b))]
+            sen_encodings = torch.cat(sen_encodings) #TODO: batchnorm
             # split sen encodings per doc
-
-
+            sen_encodings = sen_encodings.split(split_size=doc_lens)
             # stack and pad
+            sen_encodings, _ = stack_and_pad_tensors(sen_encodings) #
 
             # get predictions
-
-
-            for i in range(B // b): # Piecewise embed sentences to avoid memory overflow
-
-
-                sen_encodings.append(self.sent_encoder(sents[:,i*b:(i+1)*b,:]))
-
-            sen_encodings = torch.cat
-            None
+            y_pred = self.doc_encoder(sen_encodings)
+            return y_pred

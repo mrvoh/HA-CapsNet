@@ -41,40 +41,37 @@ def load_dataset(dataset_dir, dataset_name):
 
 	return documents
 
-def parse_dataset(dataset_dir, nr_tags):
+def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 	""""
 		Parsed files in 'train', 'dev' and 'test' subfolders in dataset_dir.
 		Takes nr_tags most occuring labels of documents in train set and filters out all others.
 		Stores *.pickle files in dataset_dir.
 	"""
 
-	DATA_SET_DIR = ".\\dataset"
-	NR_TAGS = 25
-	DATASET_NAME = 'train'
-
 	label_occs = defaultdict(int)
-	train_docs = load_dataset('train')
-	for doc in train_docs:
+	docs = load_dataset(dataset_dir)
+	for doc in docs:
 		for tag in doc.tags:
 			label_occs[tag] += 1
 
-	sorted_tags = sorted(label_occs.items(), key=operator.itemgetter(1))
-	tags_to_use = [x[0] for x in sorted_tags[:NR_TAGS]]
+	if tags_to_use is None:
+		sorted_tags = sorted(label_occs.items(), key=operator.itemgetter(1))
+		tags_to_use = [x[0] for x in sorted_tags[:nr_tags]]
 
-	for doc in train_docs:
+	for doc in docs:
 		doc.tags = [tag for tag in doc.tags if tag in tags_to_use]
 
-	with open(os.path.join(DATA_SET_DIR, DATASET_NAME + '.pkl'), 'wb') as f:
-		pickle.dump(train_docs, f)
+	with open(os.path.join(dataset_dir, dataset_name + '.pkl'), 'wb') as f:
+		pickle.dump(docs, f)
 
-	for name in ['dev', 'test']:
-		docs = load_dataset(name)
-
-		for doc in docs:
-			doc.tags = [tag for tag in doc.tags if tag in tags_to_use]
-
-		with open(os.path.join(DATA_SET_DIR, DATASET_NAME + '.pkl'), 'wb') as f:
-			pickle.dump(docs, f)
+	# for name in ['dev', 'test']:
+	# 	docs = load_dataset(name)
+	#
+	# 	for doc in docs:
+	# 		doc.tags = [tag for tag in doc.tags if tag in tags_to_use]
+	#
+	# 	with open(os.path.join(DATA_SET_DIR, DATASET_NAME + '.pkl'), 'wb') as f:
+	# 		pickle.dump(docs, f)
 
 # Parse dataset from [Documents]
 
@@ -92,6 +89,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
+	n_labels = len(label_to_idx)
 	dset = []
 	if word_to_idx is None:
 		word_to_idx = OrderedDict()
@@ -99,14 +97,16 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 	for doc in docs:
 		sample = {}
 
-		tags = [label_to_idx[tag] for tag in doc.tags]
-		sents = [[_convert_word_to_idx(w, word_to_idx) for w in sent] for sent in doc.sentences]
+		tags = [int(label_to_idx[tag]) for tag in doc.tags]
+		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx) for w in sent]) for sent in doc.sentences]
 		# sen_lens = [len(sen) for sen in sents]
 		# tokens = [tok for sent in sents for tok in sent] # flatten list
 
 		# convert to tensors
-		sample['tags'] = torch.LongTensor(tags)
-		sample['sents'] = torch.LongTensor(sents)
+		sample['tags'] = np.zeros(n_labels)
+		sample['tags'][tags] = 1
+		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
+		sample['sents'], _ = stack_and_pad_tensors(sents)
 		# sample['sen_lens'] = torch.LongTensor(sen_lens)
 		# sample['tokens'] = torch.LongTensor(tokens)
 
@@ -120,8 +120,9 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 
 def collate_fn(batch):
 
+	test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
-	doc_lens_batch = torch.LongTensor([len(doc['sents']) for doc in batch])
+	doc_lens_batch = [len(doc['sents']) for doc in batch]
 
 
 	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
@@ -132,14 +133,14 @@ def collate_fn(batch):
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 	sents_batch = sents_batch.to(device)
 	sents_len_batch = sents_len_batch.to(device)
-	doc_lens_batch = doc_lens_batch.to(device)
+	# doc_lens_batch = doc_lens_batch.to(device)
 	tags_batch = tags_batch.to(device)
 
 	# PyTorch RNN requires batches to be transposed for speed and integration with CUDA
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(sents_batch), transpose(sents_len_batch), transpose(doc_lens_batch), transpose(tags_batch))
+	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)
 
 
 

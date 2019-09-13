@@ -22,10 +22,11 @@ class Tagger(object):
 
 	def __init__(self):
 		self._spacy_tagger = spacy.load('en', disable=['parser', 'ner'])
+		self._spacy_tagger.add_pipe(self._spacy_tagger.create_pipe('sentencizer'))
 
 	def tokenize_text(self, text: str):
 
-		return [t for t in self._spacy_tagger(text)]
+		return [[t for t in sent] for sent in self._spacy_tagger(text).sents]
 
 
 class Document:
@@ -41,7 +42,7 @@ class Document:
 		"""
 
 		print(text)
-		self.tokens = [token.text for token in Document.tagger.tokenize_text(text)]
+		self.tokens = [[token.text for token in sent] for sent in Document.tagger.tokenize_text(text)]
 
 		if sentences:
 			self.sentences = []
