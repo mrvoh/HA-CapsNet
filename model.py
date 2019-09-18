@@ -92,16 +92,22 @@ class AttentionWordRNN(nn.Module):
 
         
         
-    def forward(self, embed):
+    def forward(self, x):
+
         # embeddings
-        embedded = self.lookup(embed)
+        y = self.lookup(x)
+        if len(y.shape) == 2:
+            print('HEUIOYHRIH@LFQBB')
+            y = y.unsqueeze(1)
+            # y = torch.unsqueeze(y, 1)
         # word level gru
-        output_word, _ = self.word_gru(embedded)
+        y, _ = self.word_gru(y)
 #         print output_word.size()
-        word_squish = batch_matmul_bias(output_word, self.weight_W_word,self.bias_word, nonlinearity='tanh')
-        word_attn = batch_matmul(word_squish, self.weight_proj_word)
-        word_attn_norm = self.softmax_word(word_attn.transpose(1,0))
-        word_attn_vectors = attention_mul(output_word, word_attn_norm.transpose(1,0))        
+
+        y = batch_matmul_bias(y, self.weight_W_word,self.bias_word, nonlinearity='tanh')
+        word_attn = batch_matmul(y, self.weight_proj_word)
+        word_attn_norm = self.softmax_word(word_attn)
+        word_attn_vectors = attention_mul(y, word_attn_norm) #.transpose(1,0))
         return word_attn_vectors, word_attn_norm
     
     def init_hidden(self):
@@ -213,14 +219,21 @@ class HAN(nn.Module):
         def forward(self, sents, sents_len, doc_lens):
 
             # Account for batch size
-            B = sents.size()[1]
+            sen_len, B = sents.size()
             b = self.batch_size
 
             # state_word = self.sent_encoder.init_hidden().cuda()
+            sen_encodings = None
+            for i in range(ceil(B / b)):
+                word_attention , _ = self.sent_encoder(sents[:,i*b:(i+1)*b])
+                if (sen_encodings is None):
+                    sen_encodings = word_attention
+                else:
+                    sen_encodings = torch.cat((sen_encodings, word_attention), 0)
 
 
-            sen_encodings = [self.sent_encoder(sents[:,i*b:(i+1)*b])[0] for i in range(ceil(B / b))]
-            sen_encodings = torch.cat(sen_encodings) #TODO: batchnorm
+            # sen_encodings = [self.sent_encoder(sents[:,i*b:(i+1)*b])[0] for i in range(ceil(B / b))]
+            # sen_encodings = torch.cat(s) #TODO: batchnorm
             # split sen encodings per doc
             sen_encodings = sen_encodings.split(split_size=doc_lens)
             # stack and pad

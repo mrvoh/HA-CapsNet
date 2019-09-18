@@ -17,6 +17,7 @@ from collections import defaultdict
 from json_loader import JSONLoader
 import operator
 import pickle
+from collections import Counter
 
 
 # vectors = FastText(aligned=True, cache='.word_vectors_cache', language='es')
@@ -74,18 +75,23 @@ def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 	# 		pickle.dump(docs, f)
 
 # Parse dataset from [Documents]
+UNK = '<UNK>'
+PAD = '<PAD>'
 
-def _convert_word_to_idx(word, word_to_idx):
-
+def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
 	try:
 		return word_to_idx[word]
 	except KeyError:
-		idx = len(word_to_idx)
-		word_to_idx[word] = idx
-		return idx
+		if word_counter: # word counter only given for training set
+			if word_counter[word] >= min_freq:
+				idx = len(word_to_idx)
+				word_to_idx[word] = idx
+				return idx
+		# map to <UNK>
+		return word_to_idx[UNK]
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad_idx=0, unk_idx=1, min_freq_word=5):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
@@ -93,12 +99,16 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 	dset = []
 	if word_to_idx is None:
 		word_to_idx = OrderedDict()
+		word_to_idx[PAD] = pad_idx
+		word_to_idx[UNK] = unk_idx
+		word_counter = Counter([w for doc in docs for sent in doc.sentences for w in sent])
+
 
 	for doc in docs:
 		sample = {}
 
 		tags = [int(label_to_idx[tag]) for tag in doc.tags]
-		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx) for w in sent]) for sent in doc.sentences]
+		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word) for w in sent]) for sent in doc.sentences]
 		# sen_lens = [len(sen) for sen in sents]
 		# tokens = [tok for sent in sents for tok in sent] # flatten list
 
@@ -106,7 +116,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 		sample['tags'] = np.zeros(n_labels)
 		sample['tags'][tags] = 1
 		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
-		sample['sents'], _ = stack_and_pad_tensors(sents)
+		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
 		# sample['sen_lens'] = torch.LongTensor(sen_lens)
 		# sample['tokens'] = torch.LongTensor(tokens)
 
@@ -114,10 +124,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None):
 
 	return Dataset(dset), word_to_idx
 
-
-
 # Collate function
-
 def collate_fn(batch):
 
 	test = [sent for doc in batch for sent in doc['sents']]
@@ -149,7 +156,7 @@ def get_data_loader(data, batch_size, drop_last, collate_fn=collate_fn):
     sampler = BucketBatchSampler(data,
                                  batch_size,
                                  drop_last=drop_last,
-                                 sort_key=lambda row: -max([len(sent) for sent in row['sents']]))
+                                 sort_key=lambda row: -len(row['sents']))
 
     loader = DataLoader(data,
                         batch_sampler=sampler,

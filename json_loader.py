@@ -21,10 +21,20 @@ class JSONLoader:
         sections.extend(data['main_body'])
         sections.append(data['attachments'])
 
+        sentences = []
+        for sec in sections:
+            s = sec.replace(';','.')
+            sentences += s.split("\n")
+            # replace ;\n
+            # replace \n
+
         if not self.hierarchical:
             text = '\n'.join(sections)
             sections = []
         for concept in data['concepts']:
             tags.append(concept)
 
-        return Document(text, tags, sentences=sections, filename=os.path.basename(filename))
+
+        # print(sentences)
+        # print(sections)
+        return Document(text, tags, sentences=sentences, filename=os.path.basename(filename))
