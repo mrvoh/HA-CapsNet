@@ -91,7 +91,7 @@ def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
 		return word_to_idx[UNK]
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad_idx=0, unk_idx=1, min_freq_word=5):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad_idx=0, unk_idx=1, min_freq_word=50):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""

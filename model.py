@@ -64,11 +64,11 @@ def attention_mul(rnn_outputs, att_weights):
 class AttentionWordRNN(nn.Module):
     
     
-    def __init__(self, batch_size, num_tokens, embed_size, word_gru_hidden, bidirectional= True):        
+    def __init__(self, num_tokens, embed_size, word_gru_hidden, bidirectional= True):
         
         super(AttentionWordRNN, self).__init__()
         
-        self.batch_size = batch_size
+        # self.batch_size = batch_size
         self.num_tokens = num_tokens
         self.embed_size = embed_size
         self.word_gru_hidden = word_gru_hidden
@@ -77,7 +77,8 @@ class AttentionWordRNN(nn.Module):
         self.lookup = nn.Embedding(num_tokens, embed_size)
         if bidirectional == True:
             self.word_gru = nn.GRU(embed_size, word_gru_hidden, bidirectional= True)
-            self.weight_W_word = nn.Parameter(torch.Tensor(2* word_gru_hidden,2*word_gru_hidden))
+            self.weight_W_word = nn.Linear(2* word_gru_hidden,2*word_gru_hidden)
+            # self.weight_W_word = nn.Parameter(torch.Tensor(2* word_gru_hidden,2*word_gru_hidden))
             self.bias_word = nn.Parameter(torch.Tensor(2* word_gru_hidden,1))
             self.weight_proj_word = nn.Parameter(torch.Tensor(2*word_gru_hidden, 1))
         else:
@@ -87,7 +88,7 @@ class AttentionWordRNN(nn.Module):
             self.weight_proj_word = nn.Parameter(torch.Tensor(word_gru_hidden, 1))
             
         self.softmax_word = nn.Softmax(dim=0)
-        self.weight_W_word.data.uniform_(-0.1, 0.1)
+        # self.weight_W_word.data.uniform_(-0.1, 0.1)
         self.weight_proj_word.data.uniform_(-0.1,0.1)
 
         
@@ -104,17 +105,23 @@ class AttentionWordRNN(nn.Module):
         y, _ = self.word_gru(y)
 #         print output_word.size()
 
-        y = batch_matmul_bias(y, self.weight_W_word,self.bias_word, nonlinearity='tanh')
-        word_attn = batch_matmul(y, self.weight_proj_word)
+        Hw = F.tanh(self.weight_W_word(y))
+        word_attn = Hw.matmul(self.weight_proj_word)
         word_attn_norm = self.softmax_word(word_attn)
-        word_attn_vectors = attention_mul(y, word_attn_norm) #.transpose(1,0))
-        return word_attn_vectors, word_attn_norm
+        sen_encoding = y.mul(word_attn_norm).sum(0)
+
+
+        # y = batch_matmul_bias(y, self.weight_W_word,self.bias_word, nonlinearity='tanh')
+        # word_attn = batch_matmul(y, self.weight_proj_word)
+        # word_attn_norm = self.softmax_word(word_attn)
+        # word_attn_vectors = attention_mul(y, word_attn_norm) #.transpose(1,0))
+        return sen_encoding, word_attn_norm
     
-    def init_hidden(self):
-        if self.bidirectional == True:
-            return Variable(torch.zeros(2, self.batch_size, self.word_gru_hidden))
-        else:
-            return Variable(torch.zeros(1, self.batch_size, self.word_gru_hidden))        
+    # def init_hidden(self):
+    #     if self.bidirectional == True:
+    #         return Variable(torch.zeros(2, self.batch_size, self.word_gru_hidden))
+    #     else:
+    #         return Variable(torch.zeros(1, self.batch_size, self.word_gru_hidden))
 
 
 # ## Sentence Attention model with bias
@@ -123,11 +130,11 @@ class AttentionWordRNN(nn.Module):
 class AttentionSentRNN(nn.Module):
     
     
-    def __init__(self, batch_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True):        
+    def __init__(self, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True):
         
         super(AttentionSentRNN, self).__init__()
         
-        self.batch_size = batch_size
+        # self.batch_size = batch_size
         self.sent_gru_hidden = sent_gru_hidden
         self.n_classes = n_classes
         self.word_gru_hidden = word_gru_hidden
@@ -192,26 +199,26 @@ class AttentionSentRNN(nn.Module):
         # final_map = self.final_linear(sent_attn_vectors.squeeze(0))
         # return F.log_softmax(final_map), state_sent, sent_attn_norm
     
-    def init_hidden(self):
-        if self.bidirectional == True:
-            return Variable(torch.zeros(2, self.batch_size, self.sent_gru_hidden))
-        else:
-            return Variable(torch.zeros(1, self.batch_size, self.sent_gru_hidden))
+    # def init_hidden(self):
+    #     if self.bidirectional == True:
+    #         return Variable(torch.zeros(2, self.batch_size, self.sent_gru_hidden))
+    #     else:
+    #         return Variable(torch.zeros(1, self.batch_size, self.sent_gru_hidden))
 
 
 class HAN(nn.Module):
 
-        def __init__(self, batch_size, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True):
+        def __init__(self, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True):
             super(HAN, self).__init__()
 
-            self.batch_size = batch_size
+            # self.batch_size = batch_size
             self.sent_gru_hidden = sent_gru_hidden
             self.n_classes = n_classes
             self.word_gru_hidden = word_gru_hidden
             self.bidirectional = bidirectional
 
-            self.sent_encoder = AttentionWordRNN(batch_size, num_tokens, embed_size, word_gru_hidden, bidirectional)
-            self.doc_encoder = AttentionSentRNN(batch_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional)
+            self.sent_encoder = AttentionWordRNN(num_tokens, embed_size, word_gru_hidden, bidirectional)
+            self.doc_encoder = AttentionSentRNN(sent_gru_hidden, word_gru_hidden, n_classes, bidirectional)
 
         def set_embedding(self, embed_table):
             self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
@@ -219,21 +226,23 @@ class HAN(nn.Module):
         def forward(self, sents, sents_len, doc_lens):
 
             # Account for batch size
-            sen_len, B = sents.size()
-            b = self.batch_size
+            # sen_len, B = sents.size()
+            # b = self.batch_size
 
             # state_word = self.sent_encoder.init_hidden().cuda()
-            sen_encodings = None
-            for i in range(ceil(B / b)):
-                word_attention , _ = self.sent_encoder(sents[:,i*b:(i+1)*b])
-                if (sen_encodings is None):
-                    sen_encodings = word_attention
-                else:
-                    sen_encodings = torch.cat((sen_encodings, word_attention), 0)
+            sen_encodings, _ = self.sent_encoder(sents)
+            # sen_encodings = None
+            # for i in range(ceil(B / b)):
+            #     word_attention , _ = self.sent_encoder(sents[:,i*b:(i+1)*b])
+            #     if (sen_encodings is None):
+            #         sen_encodings = word_attention
+            #     else:
+            #         sen_encodings = torch.cat((sen_encodings, word_attention), 0)
 
 
             # sen_encodings = [self.sent_encoder(sents[:,i*b:(i+1)*b])[0] for i in range(ceil(B / b))]
             # sen_encodings = torch.cat(s) #TODO: batchnorm
+            # sen_encodings = sen_encodings.permute(1,0,2)
             # split sen encodings per doc
             sen_encodings = sen_encodings.split(split_size=doc_lens)
             # stack and pad
