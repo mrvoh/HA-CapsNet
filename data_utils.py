@@ -65,15 +65,6 @@ def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 	with open(os.path.join(dataset_dir, dataset_name + '.pkl'), 'wb') as f:
 		pickle.dump(docs, f)
 
-	# for name in ['dev', 'test']:
-	# 	docs = load_dataset(name)
-	#
-	# 	for doc in docs:
-	# 		doc.tags = [tag for tag in doc.tags if tag in tags_to_use]
-	#
-	# 	with open(os.path.join(DATA_SET_DIR, DATASET_NAME + '.pkl'), 'wb') as f:
-	# 		pickle.dump(docs, f)
-
 # Parse dataset from [Documents]
 UNK = '<UNK>'
 PAD = '<PAD>'
@@ -97,6 +88,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 	"""
 	n_labels = len(label_to_idx)
 	dset = []
+	tag_counter = Counter()
 	if word_to_idx is None:
 		word_to_idx = OrderedDict()
 		word_to_idx[PAD] = pad_idx
@@ -106,23 +98,21 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 
 	for doc in docs:
 		sample = {}
-
+		# collect tags
 		tags = [int(label_to_idx[tag]) for tag in doc.tags]
+		tag_counter.update(tags)
+		# convert sentences to indices of words
 		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word) for w in sent]) for sent in doc.sentences]
-		# sen_lens = [len(sen) for sen in sents]
-		# tokens = [tok for sent in sents for tok in sent] # flatten list
 
 		# convert to tensors
 		sample['tags'] = np.zeros(n_labels)
 		sample['tags'][tags] = 1
 		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
 		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
-		# sample['sen_lens'] = torch.LongTensor(sen_lens)
-		# sample['tokens'] = torch.LongTensor(tokens)
 
 		dset.append(sample)
 
-	return Dataset(dset), word_to_idx
+	return Dataset(dset), word_to_idx, tag_counter
 
 # Collate function
 def collate_fn(batch):
@@ -161,5 +151,7 @@ def get_data_loader(data, batch_size, drop_last, collate_fn=collate_fn):
     loader = DataLoader(data,
                         batch_sampler=sampler,
                         collate_fn=collate_fn)
+						# shuffle=True,
+						# num_workers=1)
 
     return loader
