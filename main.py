@@ -18,6 +18,7 @@ from data_utils import process_dataset, get_data_loader, get_embedding
 from radam import RAdam
 from logger import get_logger, Progbar
 from metrics import *
+from text_class_learner import MultiLabelTextClassifier
 
 import cProfile, pstats, io
 from pstats import SortKey
@@ -37,7 +38,7 @@ def eval_dataset(model, dataloader, criterion, K=5, max_samples = None):
 
 			(sents, sents_len, doc_lens, target) = batch
 
-			preds, attention_scores = model(sents, sents_len, doc_lens)
+			preds, _, _ = model(sents, sents_len, doc_lens)
 			loss = criterion(preds, target)
 			eval_loss += loss.item()
 			# store predictions and targets
@@ -69,9 +70,6 @@ def eval_dataset(model, dataloader, criterion, K=5, max_samples = None):
 	return r_k, p_k, rp_k, ndcg_k, avg_loss
 
 
-
-
-
 if __name__ == '__main__':
 
 	try:
@@ -82,30 +80,52 @@ if __name__ == '__main__':
 
 	# pr = cProfile.Profile()
 	# pr.enable()
+	# for dataset in ['']:
+	# 	for model_name in ['HGRULWAN','HAN']:
+	# 		for dropout in [0.1, 0.2, 0.3]:
 	###################### MOVE TO ARGPARSER ##################################
-	dev_path = os.path.join('dataset', 'dev.pkl')
-	train_path = os.path.join('dataset', 'train.pkl')
+	dataset = ''
+	dev_path = os.path.join('dataset', 'dev{}.pkl'.format(dataset))
+	train_path = os.path.join('dataset', 'train{}.pkl'.format(dataset))
 	models_path = 'models'
-	label_to_idx_path = os.path.join('dataset', 'label_to_idx.json')
-	B_train = 20
+	min_freq_word = 100
+	label_to_idx_path = os.path.join('dataset', 'label_to_idx{}.json'.format(dataset))
+	word_to_idx_path = os.path.join('dataset', 'word_to_idx_{}.json'.format(min_freq_word))
+	preload_word_to_idx = False
+	B_train = 16
 	B_eval = 20
 	vector_cache = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache"
 	path_log = "log.txt"
-	n_epochs = 100
+	n_epochs = 15
 	eval_every = 2000
 	K = 5 # Cut-off value for metrics (e.g. Precision@K)
-	min_freq_word = 100
-	num_labels = 25
+
+	num_labels = 25 if dataset == '' else 200
 	reduction = 'mean'
 	model_name = 'HGRULWAN'
 	learning_rate = 1e-3
-	weight_decay = 0
-	dropout = 0.1
+	weight_decay = 1e-4
+	dropout = 0.2
+	embed_dim = 300
+	word_gru_hidden = sent_gru_hidden = 50
 	###########################################################################
-	logger = get_logger(path_log)
-	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-	writer = SummaryWriter(comment='Model={}-Labels={}-B={}-Reduction={}'.format(model_name,num_labels, B_train, reduction))
-	logger.info("Loading data...")
+	with open(label_to_idx_path, 'r') as f:
+		# idx_to_label = json.load(f)
+		label_to_idx = json.load(f)
+	if preload_word_to_idx:
+		with open(word_to_idx_path, 'r') as f:
+			# idx_to_label = json.load(f)
+			word_to_idx = json.load(f)
+	else:
+		word_to_idx = None
+
+
+
+
+	# logger = get_logger(path_log)
+	# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+	# writer = SummaryWriter(comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, num_labels, B_train, weight_decay, dropout))
+	# logger.info("Loading data...")
 	# load docs into memory
 	with open(train_path, 'rb') as f:
 		train_docs = pickle.load(f)
@@ -113,14 +133,16 @@ if __name__ == '__main__':
 	with open(dev_path, 'rb') as f:
 		dev_docs = pickle.load(f)
 
-	with open(label_to_idx_path, 'r') as f:
-		# idx_to_label = json.load(f)
-		label_to_idx = json.load(f)
-		# label_to_idx = {v:k for k,v in idx_to_label.items()}
+
+
 	# get dataloader
-	train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, label_to_idx)
+	train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=min_freq_word)
 	pos_weight = [v/len(train_dataset) for k,v in tag_counter_train.items()]
 	dataloader_train = get_data_loader(train_dataset, B_train, True)
+
+	# Save word_mapping
+	with open(word_to_idx_path, 'w') as f:
+		json.dump(word_to_idx, f)
 
 	# Free some memory
 	del train_dataset
@@ -132,15 +154,28 @@ if __name__ == '__main__':
 	del dev_dataset
 	del dev_docs
 
-	logger.info("Building model...")
+	# logger.info("Building model...")
+	TextClassifier = MultiLabelTextClassifier(model_name, word_to_idx, label_to_idx, path_log, save_dir=models_path,
+											  min_freq_word=min_freq_word, word_to_idx_path=word_to_idx_path,
+											  B_train=B_train,
+											  B_eval=B_eval, weight_decay=weight_decay, lr=learning_rate)
+
+	TextClassifier.init_model(embed_dim, word_gru_hidden, sent_gru_hidden, dropout, vector_cache)
+
+	TextClassifier.train(dataloader_train, dataloader_dev, pos_weight, num_epochs=n_epochs, eval_every=eval_every)
+
+
+
+
+
 	# get embeddings for dataset
 	vectors = FastText(aligned=True, cache=vector_cache, language='en')
 	embed_table = get_embedding(vectors, word_to_idx)
 
 	if model_name.lower() == 'han':
-		model = HAN(len(word_to_idx), 300, 50, 50, len(label_to_idx), dropout=dropout)
+		model = HAN(len(word_to_idx), embed_dim, word_gru_hidden, sent_gru_hidden, len(label_to_idx), dropout=dropout)
 	elif model_name.lower() == 'hgrulwan':
-		model = HGRULWAN(len(word_to_idx), 300, 50, 50, len(label_to_idx), dropout=dropout)
+		model = HGRULWAN(len(word_to_idx), embed_dim, word_gru_hidden, sent_gru_hidden, len(label_to_idx), dropout=dropout)
 	model.to(device)
 
 	# embed_table = np.random.rand(len(word_to_idx), 300)
@@ -175,7 +210,7 @@ if __name__ == '__main__':
 			optimizer.zero_grad()
 
 			(sents, sents_len, doc_lens, target) = batch
-			preds, attention_scores = model(sents, sents_len, doc_lens)
+			preds, word_attention_scores, sent_attention_scores = model(sents, sents_len, doc_lens)
 
 			loss = criterion(preds, target)
 			tr_loss += loss.item()
@@ -216,7 +251,7 @@ if __name__ == '__main__':
 				writer.add_scalars("R_{}".format(K),
 					{"Train":r_k_tr,
 					"Dev":r_k_dev},
-				 	train_step)
+					train_step)
 				writer.add_scalars("P_{}".format(K),
 					{"Train": p_k_tr,
 					"Dev": p_k_dev},

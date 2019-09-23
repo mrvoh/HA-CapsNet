@@ -81,6 +81,25 @@ def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
 		# map to <UNK>
 		return word_to_idx[UNK]
 
+def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_word=50):
+	sample = {}
+	# collect tags
+	tags = [int(label_to_idx[tag]) for tag in doc.tags]
+	# convert sentences to indices of words
+	sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word) for w in sent]) for
+			 sent in doc.sentences]
+
+	# convert to tensors
+	sample['tags'] = np.zeros(len(label_to_idx))
+	sample['tags'][tags] = 1
+	sample['tags'] = torch.FloatTensor(sample['tags'])  # One Hot Encoded target
+	sents, sents_len = stack_and_pad_tensors(sents)
+	sample['sents'] = sents  # , _ =
+	sample['sents_len'] = sents_len
+	sample['doc_len'] = len(sents)
+
+	return sample
+
 
 def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad_idx=0, unk_idx=1, min_freq_word=50):
 	""""

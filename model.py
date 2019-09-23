@@ -64,6 +64,9 @@ class MultiHeadAttention(nn.Module):
 
         return output
 
+
+
+
 class AttentionWordRNN(nn.Module):
     def __init__(self, num_tokens, embed_size, word_gru_hidden, bidirectional= True, dropout=0.1):
         
@@ -271,20 +274,19 @@ class HAN(nn.Module):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
     def forward(self, sents, sents_len, doc_lens):
-        sen_encodings, _ = self.sent_encoder(sents)
+        sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
         sen_encodings = sen_encodings.split(split_size=doc_lens)
         # stack and pad
         sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
         # get predictions
-        doc_encoding, attention_scores = self.doc_encoder(sen_encodings)
+        doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
         doc_encoding = self.drop(self.bn(doc_encoding))
 
         y_pred = self.out(doc_encoding)
 
-        return y_pred, attention_scores
-
+        return y_pred, word_attn_weight, sent_attn_weight #TODO: split out forward and predict fn for attn_weights?
 
 class HGRULWAN(nn.Module):
 
@@ -304,11 +306,11 @@ class HGRULWAN(nn.Module):
             self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
         def forward(self, sents, sents_len, doc_lens):
-            sen_encodings, _ = self.sent_encoder(sents)
+            sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
             sen_encodings = sen_encodings.split(split_size=doc_lens)
             # stack and pad
             sen_encodings, _ = stack_and_pad_tensors(sen_encodings) #
             # get predictions
-            y_pred, attn_weight = self.doc_encoder(sen_encodings)
-            return y_pred, attn_weight
+            y_pred, sent_attn_weight = self.doc_encoder(sen_encodings)
+            return y_pred, word_attn_weight, sent_attn_weight

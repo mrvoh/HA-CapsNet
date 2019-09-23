@@ -150,6 +150,9 @@ class Document:
 		self.text = text
 		self.filename = filename
 
+	def get_text_sentences(self):
+		return [" ".join(sen) for sen in self.sentences]
+
 
 	def _split_long_seqs(self):
 
@@ -194,3 +197,9 @@ class Document:
 
 		final = [[tok for tok in sen if tok != ''] for sen in final]
 		self.sentences = final
+
+
+	def __str__(self):
+
+		res = "Doc name: {}\n Text: {}".format(self.filename, "\n".join([" ".join(sen) for sen in self.sentences]))
+		return res
