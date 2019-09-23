@@ -84,6 +84,7 @@ if __name__ == '__main__':
 	# 	for model_name in ['HGRULWAN','HAN']:
 	# 		for dropout in [0.1, 0.2, 0.3]:
 	###################### MOVE TO ARGPARSER ##################################
+	pretrained_path = None #os.path.join('models', 'HGRULWAN_loss=0.04070_RP5=0.745.pt')
 	dataset = ''
 	dev_path = os.path.join('dataset', 'dev{}.pkl'.format(dataset))
 	train_path = os.path.join('dataset', 'train{}.pkl'.format(dataset))
@@ -92,8 +93,8 @@ if __name__ == '__main__':
 	label_to_idx_path = os.path.join('dataset', 'label_to_idx{}.json'.format(dataset))
 	word_to_idx_path = os.path.join('dataset', 'word_to_idx_{}.json'.format(min_freq_word))
 	preload_word_to_idx = False
-	B_train = 16
-	B_eval = 20
+	B_train = 32
+	B_eval = 32
 	vector_cache = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache"
 	path_log = "log.txt"
 	n_epochs = 15
@@ -102,10 +103,10 @@ if __name__ == '__main__':
 
 	num_labels = 25 if dataset == '' else 200
 	reduction = 'mean'
-	model_name = 'HGRULWAN'
+	model_name = 'HAN'
 	learning_rate = 1e-3
 	weight_decay = 1e-4
-	dropout = 0.2
+	dropout = 0.25
 	embed_dim = 300
 	word_gru_hidden = sent_gru_hidden = 50
 	###########################################################################
@@ -155,12 +156,16 @@ if __name__ == '__main__':
 	del dev_docs
 
 	# logger.info("Building model...")
-	TextClassifier = MultiLabelTextClassifier(model_name, word_to_idx, label_to_idx, path_log, save_dir=models_path,
-											  min_freq_word=min_freq_word, word_to_idx_path=word_to_idx_path,
-											  B_train=B_train,
-											  B_eval=B_eval, weight_decay=weight_decay, lr=learning_rate)
+	if pretrained_path:
+		TextClassifier = MultiLabelTextClassifier.load(pretrained_path)
+	else:
+		TextClassifier = MultiLabelTextClassifier(model_name, word_to_idx, label_to_idx, path_log = path_log, save_dir=models_path,
+												  min_freq_word=min_freq_word, word_to_idx_path=word_to_idx_path,
+												  B_train=B_train,
+												  B_eval=B_eval, weight_decay=weight_decay, lr=learning_rate)
 
-	TextClassifier.init_model(embed_dim, word_gru_hidden, sent_gru_hidden, dropout, vector_cache)
+		TextClassifier.init_model(embed_dim, word_gru_hidden, sent_gru_hidden, dropout, vector_cache)
+
 
 	TextClassifier.train(dataloader_train, dataloader_dev, pos_weight, num_epochs=n_epochs, eval_every=eval_every)
 

@@ -252,12 +252,12 @@ class GRULWAN1(nn.Module):
 
 class HAN(nn.Module):
 
-    def __init__(self, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional=True, dropout=0.1):
+    def __init__(self, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, num_classes, bidirectional=True, dropout=0.1, **kwargs):
         super(HAN, self).__init__()
 
         # self.batch_size = batch_size
         self.sent_gru_hidden = sent_gru_hidden
-        self.n_classes = n_classes
+        self.n_classes = num_classes
         self.word_gru_hidden = word_gru_hidden
         self.bidirectional = bidirectional
 
@@ -266,7 +266,7 @@ class HAN(nn.Module):
         self.sent_encoder = AttentionWordRNN(num_tokens, embed_size, word_gru_hidden, bidirectional)
         self.doc_encoder = AttentionSentRNN(sent_gru_hidden, word_gru_hidden, bidirectional)
 
-        self.out = nn.Linear(sent_gru_out, n_classes)
+        self.out = nn.Linear(sent_gru_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_gru_out)
         self.drop = nn.Dropout(dropout)
 
@@ -290,17 +290,17 @@ class HAN(nn.Module):
 
 class HGRULWAN(nn.Module):
 
-        def __init__(self, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional= True, dropout=0.1):
+        def __init__(self, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, num_classes, bidirectional= True, dropout=0.1, **kwargs):
             super(HGRULWAN, self).__init__()
 
             # self.batch_size = batch_size
             self.sent_gru_hidden = sent_gru_hidden
-            self.n_classes = n_classes
+            self.num_classes = num_classes
             self.word_gru_hidden = word_gru_hidden
             self.bidirectional = bidirectional
 
             self.sent_encoder = AttentionWordRNN(num_tokens, embed_size, word_gru_hidden, bidirectional, dropout=dropout)
-            self.doc_encoder = GRULWAN(sent_gru_hidden, word_gru_hidden, n_classes, bidirectional, dropout=dropout)
+            self.doc_encoder = GRULWAN(sent_gru_hidden, word_gru_hidden, num_classes, bidirectional, dropout=dropout)
 
         def set_embedding(self, embed_table):
             self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
