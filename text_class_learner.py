@@ -26,14 +26,15 @@ except ModuleNotFoundError:
 
 class MultiLabelTextClassifier:
 
-	def __init__(self, model_name, word_to_idx, label_to_idx, min_freq_word = 100,
+	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
 				 tensorboard_path = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
 				 dropout = 0.1, K=5, verbose=True, **kwargs):
 
 		self.model_name = model_name
 		self.model = None
 		self.word_to_idx = word_to_idx
-		self.label_to_idx = label_to_idx
+		self.label_to_idx = label_to_idx # Maps label_ids to index in model
+		self.label_map = label_map # Maps label ids to EUROVOC description
 		self.log_path = kwargs.get('log_path', 'log.txt')
 		self.save_dir = kwargs.get('save_dir', None) #TODO: use save_dir
 		self.tensorboard_path = tensorboard_path
@@ -63,6 +64,7 @@ class MultiLabelTextClassifier:
 			"model_name":self.model_name,
 			"word_to_idx":self.word_to_idx,
 			"label_to_idx":self.label_to_idx,
+			"label_map":self.label_map,
 			"embed_size":self.embed_size,
 			"word_gru_hidden":self.word_gru_hidden,
 			"sent_gru_hidden":self.sent_gru_hidden,
@@ -130,7 +132,9 @@ class MultiLabelTextClassifier:
 
 		idx_to_label = {v:k for k,v in self.label_to_idx.items()}
 
-		return [idx_to_label[p] for p in pred]
+		label_ids = [idx_to_label[p] for p in pred]
+		label_descriptions = [self.label_map[ix] for ix in label_ids]
+		return label_descriptions
 
 	def predict_doc(self, doc):
 
@@ -163,19 +167,27 @@ class MultiLabelTextClassifier:
 
 		# convert to lists
 		preds = list(preds.cpu().numpy())
-		word_attention_scores = list(transpose(word_attention_scores.squeeze()).cpu().numpy())
-		sent_attention_scores = list(sent_attention_scores.cpu().numpy())
+		word_attention_scores = transpose(word_attention_scores.squeeze()).cpu().numpy().tolist()
+		sent_attention_scores = sent_attention_scores.cpu().numpy().tolist()
+		# Flatten list
+		sent_attention_scores = [l[0] for sublist in sent_attention_scores for l in sublist]
 
 		# Filter predictions for padding
 		sents_len = sents_len.cpu().numpy()
-		word_attention_scores = [list(score[:l]) for l,score in zip(sents_len, word_attention_scores)]
+		if len(sents_len) > 1:
+			word_attention_scores = [score[:l] for l,score in zip(sents_len, word_attention_scores)]
+		else:
+			word_attention_scores = [word_attention_scores]
+
+		# word_attention_scores = [[s*100 for s in sen] for sen in word_attention_scores]
+
 
 		return preds, word_attention_scores, sent_attention_scores
 
 	def predict_text(self, text, return_doc=False):
 		# convert text to Document
 		sentences = [text]
-		doc = Document('', [], sentences=sentences, discard_short_sents=False, split_size_long_seqs=10**6)
+		doc = Document('', [], sentences=sentences, discard_short_sents=False, split_size_long_seqs=50)
 		# predict as doc
 		if return_doc:
 			p, w, s = self.predict_doc(doc)

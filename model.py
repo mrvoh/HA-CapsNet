@@ -161,6 +161,8 @@ class GRULWAN(nn.Module):
         word_gru_out = 2 * word_gru_hidden if bidirectional else word_gru_hidden
         sent_gru_out = 2 * sent_gru_hidden if bidirectional else sent_gru_hidden
 
+        self.score_normalizer = np.sqrt(sent_gru_out)
+
 
         self.sent_gru = nn.GRU(word_gru_out, sent_gru_hidden, bidirectional= bidirectional)
         self.U = nn.Linear(sent_gru_out, n_classes)
@@ -187,13 +189,12 @@ class GRULWAN(nn.Module):
         H = output_sent.permute(1,0,2)
         # Get labelwise attention scores per document
         # A: [B, N, L] -> softmax-normalized scores per sentence per label
-        A = self.softmax_sent(self.U(H))
+        A = self.softmax_sent(self.U(H) / self.score_normalizer) #TODO: check performance when scores are discounted --> inspired by transformer
         # Get labelwise representations of doc
         attention_expanded = torch.repeat_interleave(A, d_c, dim=2)
         H_expanded = H.repeat(1,1,self.n_classes)
 
-        V = (attention_expanded * H_expanded).view(N, B, self.n_classes, d_c).sum(dim=0) #TODO: check here
-        # V = (H.contiguous().view(-1) @ test.contiguous().view(-1, self.n_classes))
+        V = (attention_expanded * H_expanded).view(N, B, self.n_classes, d_c).sum(dim=0)
         V = self.drop2(self.bn2(V.permute(0,2,1))).permute(0,2,1)
 
         y = V.mul(self.out)

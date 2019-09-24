@@ -177,6 +177,7 @@ class Document:
 			else:
 				res.append(sen)
 
+		#TODO: MERGE SHORT SENTENCES BACK
 		assert len(res) >= len(self.sentences), "Splitting of long sentences went wrong"
 
 		final = []
