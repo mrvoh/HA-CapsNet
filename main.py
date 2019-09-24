@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
 	# pr = cProfile.Profile()
 	# pr.enable()
-	for dataset in ['', '_100']:
+	for dataset in ['_200']:
 		for model_name in ['HAN']:
 			for dropout in [0.1, 0.25, 0.35, 0.5]:
 				###################### MOVE TO ARGPARSER ##################################

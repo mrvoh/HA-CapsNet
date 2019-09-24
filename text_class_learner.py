@@ -121,19 +121,29 @@ class MultiLabelTextClassifier:
 		self.model.to(self.device)
 
 
-	def pred_to_labels(self, pred):
+	def pred_to_labels(self, pred, top=5):
 		# Converts prediction for single doc to original label names
 		if isinstance(pred, torch.Tensor):
 			pred = pred.cpu().numpy()
+			
+		pred = pred[0]
 
-		pred = expit(pred)
-		_, pred = np.where(pred > 0.5)
-		print(pred)
+
+		# normed = [x/max(pred[0]) for x in pred[0]]
+		ind = np.argpartition(pred, -top)[-top:]
+		highest_scoring = ind[np.argsort(pred[ind])]
+
+
+		# pred = expit(pred)
+		#
+		#
+		# _, sig_pred = np.where(pred > 0.5)
+		# print(pred)
 
 		idx_to_label = {v:k for k,v in self.label_to_idx.items()}
 
-		label_ids = [idx_to_label[p] for p in pred]
-		label_descriptions = [self.label_map[ix] for ix in label_ids]
+		label_ids = [idx_to_label[p] for p in highest_scoring]
+		label_descriptions = [self.label_map[ix]['label'] for ix in label_ids]
 		return label_descriptions
 
 	def predict_doc(self, doc):
@@ -180,8 +190,6 @@ class MultiLabelTextClassifier:
 			word_attention_scores = [word_attention_scores]
 
 		# word_attention_scores = [[s*100 for s in sen] for sen in word_attention_scores]
-
-
 		return preds, word_attention_scores, sent_attention_scores
 
 	def predict_text(self, text, return_doc=False):
@@ -209,6 +217,7 @@ class MultiLabelTextClassifier:
 		best_score, best_loss, train_step = (0,0,0)
 
 		for epoch in range(num_epochs):
+			torch.cuda.empty_cache()
 			self.logger.info("Epoch: {}".format(epoch))
 			best_score, best_loss, train_step = self._train_epoch(dataloader_train, dataloader_dev, optimizer,
 																  criterion, eval_every, train_step, best_score,
@@ -238,6 +247,7 @@ class MultiLabelTextClassifier:
 
 			optimizer.step()
 			prog.update(batch_idx + 1, values=[("train loss", loss.item())])
+			torch.cuda.empty_cache()
 
 			if train_step % eval_every == 0:
 				best_score, best_loss = self._eval_model(dataloader_train, dataloader_dev, criterion, best_score, best_loss, train_step)

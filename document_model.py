@@ -153,6 +153,18 @@ class Document:
 	def get_text_sentences(self):
 		return [" ".join(sen) for sen in self.sentences]
 
+	def _merge_short_seqs(self):
+
+		sents = []
+		curr_sen = []
+		for sen in self.sentences:
+			if len(curr_sen) + len(sen) <= self.split_size_long_seqs:
+				curr_sen.extend(sen)
+			else:
+				sents.append(curr_sen)
+				curr_sen = []
+
+		self.sentences = sents
 
 	def _split_long_seqs(self):
 
@@ -170,26 +182,16 @@ class Document:
 				except:
 					s = [sub.split(' ') for sub in s]
 					res.extend(s)
-				# if s == sen:
-				# 	res.append(s)
-				# else:
-				# 	res.extend(s)
 			else:
 				res.append(sen)
 
-		#TODO: MERGE SHORT SENTENCES BACK
+
 		assert len(res) >= len(self.sentences), "Splitting of long sentences went wrong"
 
 		final = []
 		# Else just split on index
 		for sen in res:
 			if len(sen) > self.split_size_long_seqs:
-
-				# try:
-				# 	res.append(s.split(' '))
-				# except:
-				# 	s = [sub.split(' ') for sub in s]
-				# 	res.extend(s)
 				final.extend(list(chunks(sen, self.split_size_long_seqs)))
 			else:
 				final.append(sen)
@@ -197,8 +199,11 @@ class Document:
 		assert len(final) >= len(res), "Splitting of long sentences went wrong"
 
 		final = [[tok for tok in sen if tok != ''] for sen in final]
-		self.sentences = final
 
+		# Merge small sentences back together
+
+		self.sentences = final
+		self._merge_short_seqs()
 
 	def __str__(self):
 
