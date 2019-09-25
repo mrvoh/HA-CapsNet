@@ -46,11 +46,13 @@ class MultiLabelTextClassifier:
 		self.min_freq_word = min_freq_word
 		self.K = K
 		self.verbose = verbose
-		# Placeholders for model initialization
-		self.embed_size = None
-		self.word_gru_hidden = None
-		self.sent_gru_hidden = None
-		self.dropout = None
+
+		# Placeholders for attributes to be initialized
+		self.embed_size = kwargs.get('embed_size', None)
+		self.word_hidden = kwargs.get('word_hidden', None)
+		self.sent_hidden = kwargs.get('sent_hidden', None)
+		self.word_encoder = kwargs.get('word_encoder', None)
+		self.sent_encoder = kwargs.get('sent_encoder', None)
 
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
@@ -66,9 +68,11 @@ class MultiLabelTextClassifier:
 			"label_to_idx":self.label_to_idx,
 			"label_map":self.label_map,
 			"embed_size":self.embed_size,
-			"word_gru_hidden":self.word_gru_hidden,
-			"sent_gru_hidden":self.sent_gru_hidden,
+			"word_hidden":self.word_hidden,
+			"sent_hidden":self.sent_hidden,
 			"dropout":self.dropout,
+			"word_encoder":self.word_encoder,
+			"sent_encoder":self.sent_encoder,
 			"state_dict":self.model.state_dict()
 		}
 
@@ -93,25 +97,24 @@ class MultiLabelTextClassifier:
 		model.to(self.device)
 		self.model = model
 
-
-
 		return self
 
-
-
-	def init_model(self, embed_dim, word_gru_hidden, sent_gru_hidden, dropout, vector_cache):
+	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder = 'gru', sent_encoder = 'gru'):
 
 		self.embed_size = embed_dim
-		self.word_gru_hidden = word_gru_hidden
-		self.sent_gru_hidden = sent_gru_hidden
+		self.word_hidden = word_hidden
+		self.sent_hidden = sent_hidden
 		self.dropout = dropout
+		self.word_encoder = word_encoder
+		self.sent_encoder = sent_encoder
 
 		# Initialize model and load pretrained weights if given
 		self.logger.info("Building model...")
 		if self.model_name.lower() == 'han':
-			self.model = HAN(self.vocab_size, embed_dim, word_gru_hidden, sent_gru_hidden, self.num_labels, dropout=dropout)
+			self.model = HAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
+							 word_encoder = word_encoder, sent_encoder = sent_encoder)
 		elif self.model_name.lower() == 'hgrulwan':
-			self.model = HGRULWAN(self.vocab_size, embed_dim, word_gru_hidden, sent_gru_hidden,self.num_labels, dropout=dropout)
+			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout)
 
 		# Load embeddings
 		vectors = FastText(aligned=True, cache=vector_cache, language='en')
@@ -210,7 +213,7 @@ class MultiLabelTextClassifier:
 		# # Get dataloaders for training and evaluation
 		# dataloader_train, dataloader_dev, pos_weight = self._get_dataloaders(train_path, dev_path)
 
-		criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device))
+		criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='sum')
 		optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
 		# Train epoch

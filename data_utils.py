@@ -6,7 +6,7 @@ from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 from torch.utils.data import DataLoader
 import torch
 import os
-import nltk
+# import nltk
 import numpy as np
 import json
 from collections import OrderedDict
@@ -23,9 +23,9 @@ from collections import Counter
 # vectors = FastText(aligned=True, cache='.word_vectors_cache', language='es')
 
 def get_embedding(vecs, word_to_idx):
-    embed_table = [vecs[key].numpy() for key in word_to_idx.keys()]
-    embed_table = np.array(embed_table, dtype=float)
-    return embed_table
+	embed_table = [vecs[key].numpy() for key in word_to_idx.keys()]
+	embed_table = np.array(embed_table, dtype=float)
+	return embed_table
 
 def load_dataset(dataset_dir, dataset_name):
 	"""
@@ -134,7 +134,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 	return Dataset(dset), word_to_idx, tag_counter
 
 # Collate function
-def collate_fn(batch):
+def collate_fn_rnn(batch):
 
 	test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
@@ -158,19 +158,42 @@ def collate_fn(batch):
 	# return (word_ids_batch, seq_len_batch, label_batch)
 	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)
 
+def collate_fn_transformer(batch):
+
+	test = [sent for doc in batch for sent in doc['sents']]
+	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
+	doc_lens_batch = [len(doc['sents']) for doc in batch]
+
+
+	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
+	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
+	# sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
+	# word_len_batch, _ = stack_and_pad_tensors([seq['word_len'] for seq in batch])
+
+	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+	sents_batch = sents_batch.to(device)
+	sents_len_batch = sents_len_batch.to(device)
+	# doc_lens_batch = doc_lens_batch.to(device)
+	tags_batch = tags_batch.to(device)
+
+	# return (word_ids_batch, seq_len_batch, label_batch)
+	return (sents_batch, sents_len_batch, doc_lens_batch, tags_batch)
 
 
 # Get dataloader
-def get_data_loader(data, batch_size, drop_last, collate_fn=collate_fn):
-    sampler = BucketBatchSampler(data,
-                                 batch_size,
-                                 drop_last=drop_last,
-                                 sort_key=lambda row: -len(row['sents']))
+def get_data_loader(data, batch_size, drop_last, use_rnn):
 
-    loader = DataLoader(data,
-                        batch_sampler=sampler,
-                        collate_fn=collate_fn)
+	sampler = BucketBatchSampler(data,
+								 batch_size,
+								 drop_last=drop_last,
+								 sort_key=lambda row: -len(row['sents']))
+
+	collate_fn = collate_fn_rnn if use_rnn else collate_fn_transformer
+
+	loader = DataLoader(data,
+						batch_sampler=sampler,
+						collate_fn=collate_fn)
 						# shuffle=True,
 						# num_workers=1)
 
-    return loader
+	return loader

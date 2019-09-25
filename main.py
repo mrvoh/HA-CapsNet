@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
 	# pr = cProfile.Profile()
 	# pr.enable()
-	for dataset in ['_200']:
+	for dataset in ['_500']:
 		for model_name in ['HAN']:
 			for dropout in [0.1, 0.25, 0.35, 0.5]:
 				###################### MOVE TO ARGPARSER ##################################
@@ -89,27 +89,29 @@ if __name__ == '__main__':
 				dev_path = os.path.join('dataset', 'dev{}.pkl'.format(dataset))
 				train_path = os.path.join('dataset', 'train{}.pkl'.format(dataset))
 				models_path = 'models'
-				min_freq_word = 100
+				min_freq_word = 50
 				label_to_idx_path = os.path.join('dataset', 'label_to_idx{}.json'.format(dataset))
 				label_map_path = os.path.join('dataset', 'label_map.json')
 				word_to_idx_path = os.path.join('dataset', 'word_to_idx_python.json'.format(min_freq_word))
 				preload_word_to_idx = False
-				B_train = 32 if dataset == '' else 20
-				B_eval = 32 if dataset == '' else 20
+				B_train = 32 if dataset == '' else 64
+				B_eval = 32 if dataset == '' else 64
 				vector_cache = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache"
 				path_log = "log.txt"
-				n_epochs = 15
+				n_epochs = 25
 				eval_every = 2000
 				K = 5 # Cut-off value for metrics (e.g. Precision@K)
-
-				num_labels = 25 if dataset == '' else 200
+				word_encoder = 'transformer'
+				sent_encoder = 'transformer' #'transformer'
+				num_labels = 30 if dataset == '' else 500
 				reduction = 'mean'
 				# model_name = 'HAN'
 				learning_rate = 1e-3
 				weight_decay = 1e-4
 				# dropout = 0.25
 				embed_dim = 300
-				word_gru_hidden = sent_gru_hidden = 50
+				word_hidden = sent_hidden = 160
+				use_rnn = word_encoder == 'gru'
 				###########################################################################
 				with open(label_to_idx_path, 'r') as f:
 					# idx_to_label = json.load(f)
@@ -144,7 +146,7 @@ if __name__ == '__main__':
 				# get dataloader
 				train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=min_freq_word)
 				pos_weight = [v/len(train_dataset) for k,v in tag_counter_train.items()]
-				dataloader_train = get_data_loader(train_dataset, B_train, True)
+				dataloader_train = get_data_loader(train_dataset, B_train, True, use_rnn)
 
 				# Save word_mapping
 				with open(word_to_idx_path, 'w') as f:
@@ -155,7 +157,7 @@ if __name__ == '__main__':
 				del train_docs
 
 				dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=min_freq_word)
-				dataloader_dev = get_data_loader(dev_dataset, B_eval, False)
+				dataloader_dev = get_data_loader(dev_dataset, B_eval, False, use_rnn)
 				# Free some memory
 				del dev_dataset
 				del dev_docs
@@ -166,10 +168,10 @@ if __name__ == '__main__':
 				else:
 					TextClassifier = MultiLabelTextClassifier(model_name, word_to_idx, label_to_idx, label_map, path_log = path_log, save_dir=models_path,
 															  min_freq_word=min_freq_word, word_to_idx_path=word_to_idx_path,
-															  B_train=B_train,
+															  B_train=B_train, word_encoder = word_encoder,
 															  B_eval=B_eval, weight_decay=weight_decay, lr=learning_rate)
 
-					TextClassifier.init_model(embed_dim, word_gru_hidden, sent_gru_hidden, dropout, vector_cache)
+					TextClassifier.init_model(embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder=word_encoder, sent_encoder=sent_encoder)
 
 
 				TextClassifier.train(dataloader_train, dataloader_dev, pos_weight, num_epochs=n_epochs, eval_every=eval_every)
