@@ -7,6 +7,7 @@ TODO: Data pre-processing
 import os
 import pickle
 import json
+import argparse
 from torchnlp.word_to_vector import FastText
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -31,11 +32,144 @@ if __name__ == '__main__':
 	except ModuleNotFoundError:
 		APEX_AVAILABLE = False
 
+	#########################################################################################
+	# ARGUMENT PARSING
+	#########################################################################################
+
+	parser = argparse.ArgumentParser()
+
+	#  MAIN ARGUMENTS
+	parser.add_argument("--do_train",
+						action='store_true',
+						help="Whether to run training.")
+	parser.add_argument("--do_eval",
+						action='store_true',
+						help="Whether to run eval on the dev set.")
+	parser.add_argument("--pretrained_path",
+						default=None,
+						# "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\data\\NER\\eng\\testxlm\\pytorch_model.bin",
+						type=str,
+						required=False,
+						help="The path from where the class-names are to be retrieved.")
+
+	#  TRAIN/EVAL ARGS
+	parser.add_argument("--train_batch_size",
+						default=12,
+						type=int,
+						help="Total batch size for training.")
+	parser.add_argument("--eval_batch_size",
+						default=128,
+						type=int,
+						help="Total batch size for eval.")
+	parser.add_argument("--learning_rate",
+						default=1e-3,
+						type=float,
+						help="The initial learning rate for Adam.")
+	parser.add_argument("--dropout",
+						default=0.1,
+						type=float,
+						help="The initial learning rate for Adam.")
+	parser.add_argument("--num_train_epochs",
+						default=4.0,
+						type=float,
+						help="Total number of training epochs to perform.")
+	parser.add_argument("--eval_every",
+						default=1500,
+						type=int,
+						help="Nr of training updates before evaluating model")
+	parser.add_argument("--K",
+						default=5,
+						type=int,
+						help="Cut-off value for evaluation metrics")
+	parser.add_argument("--weight_decay",
+						default=1e-4,
+						type=float,
+						help="The initial learning rate for Adam.")
+
+	#  MODEL ARGS
+	parser.add_argument("--model_name",
+						default='HCapsNet',
+						# "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\data\\NER\\eng\\testxlm\\pytorch_model.bin",
+						type=str,
+						required=False,
+						help="Model to use. Options: HAN, HGRULWAN & HCapsNet")
+	parser.add_argument("--word_encoder",
+					   default='gru',
+					   # "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\data\\NER\\eng\\testxlm\\pytorch_model.bin",
+					   type=str,
+					   required=False,
+					   help="The path from where the class-names are to be retrieved.")
+	parser.add_argument("--sen_encoder",
+						default='gru',
+						# "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\data\\NER\\eng\\testxlm\\pytorch_model.bin",
+						type=str,
+						required=False,
+						help="The path from where the class-names are to be retrieved.")
+	parser.add_argument("--embed_dim",
+						default=300,
+						type=int,
+						help="Nr of dimensions of used word vectors")
+	parser.add_argument("--word_hidden",
+						default=50,
+						type=int,
+						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
+	parser.add_argument("--sent_hidden",
+						default=50,
+						type=int,
+						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
+
+		# caps net options
+	parser.add_argument("--dim_caps",
+						default=16,
+						type=int,
+						help="Nr of dimensions of a capsule")
+	parser.add_argument("--num_caps",
+						default=32,
+						type=int,
+						help="Number of capsules in Primary Capsule Layer")
+	parser.add_argument("--num_compressed_caps",
+						default=100,
+						type=int,
+						help="Number of compressed capsules")
+
+	#	DATA & PRE-PROCESSING ARGS
+	# dev_path = os.path.join('dataset', 'dev{}.pkl'.format(dataset))
+	# train_path = os.path.join('dataset', 'train{}.pkl'.format(dataset))
+	parser.add_argument("--train_path",
+						default=os.path.join('dataset', 'train.pkl'),
+						type=str,
+						required=False,
+						help="The path from where the train dataset is to be retrieved.")
+	parser.add_argument("--dev_path",
+						default=os.path.join('dataset', 'train.pkl'),
+						type=str,
+						required=False,
+						help="The path from where the dev dataset is to be retrieved.")
+	parser.add_argument("--vector_cache",
+						default="D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache",
+						type=str,
+						required=False,
+						help="Folder where vector caches are stored.")
+	parser.add_argument("--preload_word_to_idx",
+						action='store_true',
+						help="Whether to use an existing word to idx mapping.")
+	parser.add_argument("--word_to_idx_path",
+						default=os.path.join('dataset', 'train.pkl'),
+						type=str,
+						required=False,
+						help="The path from where the train dataset is to be retrieved.")
+	parser.add_argument("--min_freq_word",
+						default=50,
+						type=int,
+						help="Minimum nr of occurrences before being assigned a word vector")
+
+	args = parser.parse_args()
+
 	# pr = cProfile.Profile()
 	# pr.enable()
 	for dataset in ['_100']:
-		for model_name in ['HCapsNet']:
-			for dropout in [0.1]: #, 0.25, 0.35, 0.5]:
+		for model_name in ['Hcapsnet']:
+			for dropout in [0.3]: #, 0.25, 0.35, 0.5]:
 				###################### MOVE TO ARGPARSER ##################################
 				pretrained_path = None #os.path.join('models', 'HGRULWAN_loss=0.04070_RP5=0.745.pt')
 				# dataset = ''
@@ -47,14 +181,14 @@ if __name__ == '__main__':
 				label_map_path = os.path.join('dataset', 'label_map.json')
 				word_to_idx_path = os.path.join('dataset', 'word_to_idx_{}.json'.format(min_freq_word))
 				preload_word_to_idx = False
-				B_train = 32 if dataset == '' else 32
-				B_eval = 32 if dataset == '' else 32
+				B_train = 32 if dataset == '' else 20
+				B_eval = 32 if dataset == '' else 20
 				vector_cache = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache"
 				path_log = "log.txt"
 				n_epochs = 20
 				eval_every = 2000
 				K = 5 # Cut-off value for metrics (e.g. Precision@K)
-				word_encoder = 'gru'
+				word_encoder = 'transformer'
 				sent_encoder = 'gru'
 				num_labels = 30 if dataset == '' else 100
 				reduction = 'mean'
@@ -63,9 +197,13 @@ if __name__ == '__main__':
 				weight_decay = 1e-4
 				# dropout = 0.25
 				embed_dim = 300
-				word_hidden = 50
+				word_hidden = 100
 				sent_hidden = 50
+				dim_caps = 16
+				num_caps = 32
+				num_compressed_caps = 100
 				use_rnn = word_encoder == 'gru'
+
 				###########################################################################
 				with open(label_to_idx_path, 'r') as f:
 					# idx_to_label = json.load(f)

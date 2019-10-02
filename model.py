@@ -9,7 +9,7 @@ transpose = (lambda b: b.t_().squeeze(0).contiguous())
 class HAN(nn.Module):
 
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 max_seq_len = 50, max_doc_len = 100, num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, **kwargs):
         super(HAN, self).__init__()
 
         # self.batch_size = batch_size
@@ -25,11 +25,11 @@ class HAN(nn.Module):
 
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
-                                                 max_seq_len=max_seq_len, num_layers=num_layers_word, nhead=nhead_word
+                                                 num_layers=num_layers_word, nhead=nhead_word
                                                  )
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
-                                                max_seq_len=max_doc_len, num_layers=num_layers_sen, nhead=nhead_sen)
+                                                num_layers=num_layers_sen, nhead=nhead_sen)
 
         self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
@@ -109,7 +109,7 @@ class HGRULWAN(nn.Module):
 
 class HCapsNet(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 max_seq_len = 50, max_doc_len = 100, num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, **kwargs):
         super(HCapsNet, self).__init__()
 
         # self.batch_size = batch_size
@@ -125,13 +125,13 @@ class HCapsNet(nn.Module):
 
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
-                                                 max_seq_len=max_seq_len, num_layers=num_layers_word, nhead=nhead_word
+                                                 num_layers=num_layers_word, nhead=nhead_word
                                                  )
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
-                                                max_seq_len=max_doc_len, num_layers=num_layers_sen, nhead=nhead_sen)
+                                                num_layers=num_layers_sen, nhead=nhead_sen)
 
-        self.caps_classifier = CapsNet_Text(sent_out, num_classes, dim_caps=16, num_caps=25, num_compressed_caps=72)
+        self.caps_classifier = CapsNet_Text(sent_out, num_classes, dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
         # self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
@@ -153,7 +153,7 @@ class HCapsNet(nn.Module):
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
-        doc_encoding = self.drop(self.bn(doc_encoding)).unsqueeze(2)
+        doc_encoding = self.drop(self.bn(doc_encoding)).unsqueeze(1)
 
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)

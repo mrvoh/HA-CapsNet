@@ -66,7 +66,7 @@ class TransformerEncoder(nn.Module):
 
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 max_seq_len = 50, num_layers = 1, nhead = 4):
+				 num_layers = 1, nhead = 4):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -119,7 +119,7 @@ class AttentionWordEncoder(nn.Module):
 class AttentionSentEncoder(nn.Module):
 
 	def __init__(self, encoder_type, sent_hidden, word_out, bidirectional=True,
-				 max_seq_len=100, num_layers=1, nhead=4, dropout=0.1):
+				 num_layers=1, nhead=4, dropout=0.1):
 
 		super(AttentionSentEncoder, self).__init__()
 
@@ -399,12 +399,12 @@ class CapsNet_Text(nn.Module):
 		self.num_compressed_caps = num_compressed_caps
 
 
-		self.primary_capsules_doc = PrimaryCaps(num_capsules=num_caps, in_channels=input_size, out_channels=dim_caps, kernel_size=1, stride=1)
+		self.primary_capsules_doc = PrimaryCaps(num_capsules=num_caps, in_channels=1, out_channels=dim_caps, kernel_size=1, stride=1)
 
 		self.flatten_capsules = FlattenCaps()
 
 		#TODO: verify
-		self.W_doc = nn.Parameter(torch.FloatTensor(  dim_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
+		self.W_doc = nn.Parameter(torch.FloatTensor( input_size * dim_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
 		torch.nn.init.xavier_uniform_(self.W_doc)
 
 		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,

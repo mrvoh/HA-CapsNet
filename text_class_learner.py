@@ -101,7 +101,8 @@ class MultiLabelTextClassifier:
 
 		return self
 
-	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder = 'gru', sent_encoder = 'gru'):
+	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder = 'gru', sent_encoder = 'gru',
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -119,7 +120,8 @@ class MultiLabelTextClassifier:
 			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout)
 		elif self.model_name.lower() == 'hcapsnet':
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 word_encoder = word_encoder, sent_encoder = sent_encoder)
+							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
 		# Load embeddings
 		vectors = FastText(aligned=True, cache=vector_cache, language='en')
 		embed_table = get_embedding(vectors, self.word_to_idx)
