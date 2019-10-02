@@ -10,7 +10,7 @@ import gc
 from torchnlp.encoders.text import stack_and_pad_tensors
 from scipy.special import expit
 
-from model import HAN, HGRULWAN
+from model import HAN, HGRULWAN, HCapsNet
 from data_utils import process_dataset, get_data_loader, get_embedding, _convert_word_to_idx
 from radam import RAdam
 from logger import get_logger, Progbar
@@ -92,6 +92,8 @@ class MultiLabelTextClassifier:
 			model = HAN(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 		elif params['model_name'].lower() == 'hgrulwan':
 			model = HGRULWAN(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
+		elif params['model_name'].lower() == 'hcapsnet':
+			model = HCapsNet(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
 		model.load_state_dict(params['state_dict'])
 		model.to(self.device)
@@ -115,7 +117,9 @@ class MultiLabelTextClassifier:
 							 word_encoder = word_encoder, sent_encoder = sent_encoder)
 		elif self.model_name.lower() == 'hgrulwan':
 			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout)
-
+		elif self.model_name.lower() == 'hcapsnet':
+			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
+							 word_encoder = word_encoder, sent_encoder = sent_encoder)
 		# Load embeddings
 		vectors = FastText(aligned=True, cache=vector_cache, language='en')
 		embed_table = get_embedding(vectors, self.word_to_idx)
@@ -131,17 +135,8 @@ class MultiLabelTextClassifier:
 			
 		pred = pred[0]
 
-
-		# normed = [x/max(pred[0]) for x in pred[0]]
 		ind = np.argpartition(pred, -top)[-top:]
 		highest_scoring = ind[np.argsort(pred[ind])]
-
-
-		# pred = expit(pred)
-		#
-		#
-		# _, sig_pred = np.where(pred > 0.5)
-		# print(pred)
 
 		idx_to_label = {v:k for k,v in self.label_to_idx.items()}
 
@@ -175,12 +170,17 @@ class MultiLabelTextClassifier:
 
 		# Get predictions
 		with torch.no_grad():
-			preds, word_attention_scores, sent_attention_scores = self.model(transpose(sample['sents']), sample['sents_len'],
+			if self.word_encoder.lower() == 'gru':
+				sample['sents'] = transpose(sample['sents'])
+
+			preds, word_attention_scores, sent_attention_scores = self.model(sample['sents'], sample['sents_len'],
 																	sample['doc_len'])
 
 		# convert to lists
 		preds = list(preds.cpu().numpy())
-		word_attention_scores = transpose(word_attention_scores.squeeze()).cpu().numpy().tolist()
+		if self.word_encoder.lower() == 'gru':
+			word_attention_scores = transpose(word_attention_scores)
+		word_attention_scores = word_attention_scores.squeeze().cpu().numpy().tolist()
 		sent_attention_scores = sent_attention_scores.cpu().numpy().tolist()
 		# Flatten list
 		sent_attention_scores = [l[0] for sublist in sent_attention_scores for l in sublist]
@@ -212,9 +212,11 @@ class MultiLabelTextClassifier:
 
 		# # Get dataloaders for training and evaluation
 		# dataloader_train, dataloader_dev, pos_weight = self._get_dataloaders(train_path, dev_path)
-
-		criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='sum')
-		optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+		if self.model_name.lower() == 'hcapsnet':
+			criterion = torch.nn.BCELoss()
+		else:
+			criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='mean') #TODO: change back to BCELossWithLogits for other models
+		optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay) # torch.optim.Adam(self.model.parameters(), lr=self.lr) #
 
 		# Train epoch
 		best_score, best_loss, train_step = (0,0,0)
@@ -239,6 +241,7 @@ class MultiLabelTextClassifier:
 			(sents, sents_len, doc_lens, target) = batch
 			preds, word_attention_scores, sent_attention_scores = self.model(sents, sents_len, doc_lens)
 
+			test = torch.isnan(preds)
 			loss = criterion(preds, target)
 			tr_loss += loss.item()
 

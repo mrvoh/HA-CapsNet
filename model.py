@@ -8,7 +8,7 @@ transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 class HAN(nn.Module):
 
-    def __init__(self, num_tokens, embed_size, sent_hidden, word_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
+    def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  max_seq_len = 50, max_doc_len = 100, num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, **kwargs):
         super(HAN, self).__init__()
 
@@ -17,9 +17,11 @@ class HAN(nn.Module):
         self.n_classes = num_classes
         self.word_hidden = word_hidden
         self.bidirectional = bidirectional
+        self.word_contextualizer = word_encoder
+        self.sent_contextualizer = sent_encoder
 
-        word_out = 2 * word_hidden if (bidirectional and word_encoder =='gru')  else word_hidden
-        sent_out = 2 * sent_hidden if (bidirectional and sent_encoder =='gru')  else sent_hidden
+        word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
+        sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() =='gru')  else sent_hidden
 
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
@@ -28,16 +30,6 @@ class HAN(nn.Module):
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
                                                 max_seq_len=max_doc_len, num_layers=num_layers_sen, nhead=nhead_sen)
-        # if word_encoder.lower() == 'gru':
-        #
-        # elif word_encoder.lower() == 'transformer':
-        #     self.sent_encoder = AttentionWordTransformer(num_tokens, embed_size, max_seq_len, num_layers, nhead, word_hidden, dropout)
-        #
-        # if sent_encoder.lower() == 'gru':
-        #     self.doc_encoder = AttentionSentRNN(sent_hidden, word_hidden, bidirectional)
-        # elif sent_encoder.lower() == 'transformer':
-        #     self.doc_encoder = AttentionSentRNN(sent_hidden, word_hidden, bidirectional)#TODO: create transformer sent encoder
-
 
         self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
@@ -50,8 +42,8 @@ class HAN(nn.Module):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        # if self.word_encoder != self.sent_encoder:
-        #     sen_encodings = sen_encodings.permute(1,0,2)
+        if self.word_contextualizer != self.sent_contextualizer:
+            sen_encodings = sen_encodings.permute(1,0,2)
 
         sen_encodings = sen_encodings.split(split_size=doc_lens)
         # stack and pad
@@ -70,8 +62,8 @@ class HAN(nn.Module):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        # if self.word_encoder != self.sent_encoder:
-        #     sen_encodings = sen_encodings.permute(1,0,2)
+        # if self.word_contextualizer != self.sent_contextualizer:
+        #     sen_encodings = sen_encodings.permute(1, 0, 2)
 
         sen_encodings = sen_encodings.split(split_size=doc_lens)
         # stack and pad
@@ -115,4 +107,55 @@ class HGRULWAN(nn.Module):
             return y_pred, word_attn_weight, sent_attn_weight
 
 
-# class HCapsNet(nn.Module):
+class HCapsNet(nn.Module):
+    def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
+                 max_seq_len = 50, max_doc_len = 100, num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, **kwargs):
+        super(HCapsNet, self).__init__()
+
+        # self.batch_size = batch_size
+        self.sent_gru_hidden = sent_hidden
+        self.n_classes = num_classes
+        self.word_hidden = word_hidden
+        self.bidirectional = bidirectional
+        self.word_contextualizer = word_encoder
+        self.sent_contextualizer = sent_encoder
+
+        word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
+        sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() =='gru')  else sent_hidden
+
+        self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
+                                                 bidirectional=bidirectional,
+                                                 max_seq_len=max_seq_len, num_layers=num_layers_word, nhead=nhead_word
+                                                 )
+        self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
+                                                bidirectional=bidirectional,
+                                                max_seq_len=max_doc_len, num_layers=num_layers_sen, nhead=nhead_sen)
+
+        self.caps_classifier = CapsNet_Text(sent_out, num_classes, dim_caps=16, num_caps=25, num_compressed_caps=72)
+        # self.out = nn.Linear(sent_out, num_classes)
+        self.bn = nn.BatchNorm1d(sent_out)
+        self.drop = nn.Dropout(dropout)
+
+    def set_embedding(self, embed_table):
+        self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
+
+
+    def forward(self, sents, sents_len, doc_lens):
+
+        sen_encodings, word_attn_weight = self.sent_encoder(sents)
+
+        # if self.word_contextualizer != self.sent_contextualizer:
+        #     sen_encodings = sen_encodings.permute(1, 0, 2)
+
+        sen_encodings = sen_encodings.split(split_size=doc_lens)
+        # stack and pad
+        sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
+        # get predictions
+        doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
+
+        doc_encoding = self.drop(self.bn(doc_encoding)).unsqueeze(2)
+
+        poses, activations = self.caps_classifier(doc_encoding)
+        activations = activations.squeeze(2)
+
+        return activations, word_attn_weight, sent_attn_weight

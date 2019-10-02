@@ -23,53 +23,6 @@ from text_class_learner import MultiLabelTextClassifier
 import cProfile, pstats, io
 from pstats import SortKey
 
-
-
-def eval_dataset(model, dataloader, criterion, K=5, max_samples = None):
-	logger.info("Evaluating model")
-	model.eval()
-	y_pred = []
-	y_true = []
-	eval_loss = 0
-
-	# Get all predictions on dataset
-	with torch.no_grad():
-		for batch_idx, batch in enumerate(dataloader):
-
-			(sents, sents_len, doc_lens, target) = batch
-
-			preds, _, _ = model(sents, sents_len, doc_lens)
-			loss = criterion(preds, target)
-			eval_loss += loss.item()
-			# store predictions and targets
-			y_pred.extend(list(preds.cpu().detach().numpy()))
-			y_true.extend(list(target.cpu().detach().numpy()))
-
-			if max_samples:
-				if batch_idx >= max_samples:
-					break
-
-	avg_loss = eval_loss / len(dataloader)
-
-
-	template = 'R@{} : {:1.3f}   P@{} : {:1.3f}   RP@{} : {:1.3f}   NDCG@{} : {:1.3f}'
-
-
-	for i in range(1, K + 1):
-		r_k = mean_recall_k(y_true,
-							y_pred, k=i)
-		p_k = mean_precision_k(y_true,
-							   y_pred, k=i)
-		rp_k = mean_rprecision_k(y_true,
-								 y_pred, k=i)
-		ndcg_k = mean_ndcg_score(y_true,
-								 y_pred, k=i)
-		logger.info(template.format(i, r_k, i, p_k, i, rp_k, i, ndcg_k))
-	logger.info('----------------------------------------------------')
-
-	return r_k, p_k, rp_k, ndcg_k, avg_loss
-
-
 if __name__ == '__main__':
 
 	try:
@@ -80,9 +33,9 @@ if __name__ == '__main__':
 
 	# pr = cProfile.Profile()
 	# pr.enable()
-	for dataset in ['_500']:
-		for model_name in ['HAN']:
-			for dropout in [0.1, 0.25, 0.35, 0.5]:
+	for dataset in ['_100']:
+		for model_name in ['HCapsNet']:
+			for dropout in [0.1]: #, 0.25, 0.35, 0.5]:
 				###################### MOVE TO ARGPARSER ##################################
 				pretrained_path = None #os.path.join('models', 'HGRULWAN_loss=0.04070_RP5=0.745.pt')
 				# dataset = ''
@@ -92,25 +45,26 @@ if __name__ == '__main__':
 				min_freq_word = 50
 				label_to_idx_path = os.path.join('dataset', 'label_to_idx{}.json'.format(dataset))
 				label_map_path = os.path.join('dataset', 'label_map.json')
-				word_to_idx_path = os.path.join('dataset', 'word_to_idx_python.json'.format(min_freq_word))
+				word_to_idx_path = os.path.join('dataset', 'word_to_idx_{}.json'.format(min_freq_word))
 				preload_word_to_idx = False
-				B_train = 32 if dataset == '' else 64
-				B_eval = 32 if dataset == '' else 64
+				B_train = 32 if dataset == '' else 32
+				B_eval = 32 if dataset == '' else 32
 				vector_cache = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache"
 				path_log = "log.txt"
-				n_epochs = 25
+				n_epochs = 20
 				eval_every = 2000
 				K = 5 # Cut-off value for metrics (e.g. Precision@K)
-				word_encoder = 'transformer'
-				sent_encoder = 'transformer' #'transformer'
-				num_labels = 30 if dataset == '' else 500
+				word_encoder = 'gru'
+				sent_encoder = 'gru'
+				num_labels = 30 if dataset == '' else 100
 				reduction = 'mean'
 				# model_name = 'HAN'
 				learning_rate = 1e-3
 				weight_decay = 1e-4
 				# dropout = 0.25
 				embed_dim = 300
-				word_hidden = sent_hidden = 160
+				word_hidden = 50
+				sent_hidden = 50
 				use_rnn = word_encoder == 'gru'
 				###########################################################################
 				with open(label_to_idx_path, 'r') as f:
@@ -127,12 +81,6 @@ if __name__ == '__main__':
 				else:
 					word_to_idx = None
 
-
-
-
-				# logger = get_logger(path_log)
-				# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-				# writer = SummaryWriter(comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, num_labels, B_train, weight_decay, dropout))
 				# logger.info("Loading data...")
 				# load docs into memory
 				with open(train_path, 'rb') as f:
