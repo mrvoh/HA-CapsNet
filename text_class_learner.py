@@ -27,7 +27,7 @@ except ModuleNotFoundError:
 class MultiLabelTextClassifier:
 
 	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
-				 tensorboard_path = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
+				 tensorboard_dir = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
 				 dropout = 0.1, K=5, verbose=True, **kwargs):
 
 		self.model_name = model_name
@@ -37,7 +37,7 @@ class MultiLabelTextClassifier:
 		self.label_map = label_map # Maps label ids to EUROVOC description
 		self.log_path = kwargs.get('log_path', 'log.txt')
 		self.save_dir = kwargs.get('save_dir', None) #TODO: use save_dir
-		self.tensorboard_path = tensorboard_path
+		self.tensorboard_dir = tensorboard_dir
 		self.B_train = B_train
 		self.B_eval = B_eval
 		self.lr = lr
@@ -48,18 +48,23 @@ class MultiLabelTextClassifier:
 		self.verbose = verbose
 
 		# Placeholders for attributes to be initialized
+		# TODO: use kwarg arguments downstream  --> or just keep for load method?
 		self.embed_size = kwargs.get('embed_size', None)
 		self.word_hidden = kwargs.get('word_hidden', None)
 		self.sent_hidden = kwargs.get('sent_hidden', None)
 		self.word_encoder = kwargs.get('word_encoder', None)
 		self.sent_encoder = kwargs.get('sent_encoder', None)
+		self.pretrained_path = kwargs.get('pretrained_path', None)
+		self.optimizer = kwargs.get('optimizer', None)
+		self.criterion = kwargs.get('criterion', None)
 
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
 		self.num_labels = len(label_to_idx)
 		self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 		self.logger = get_logger(self.log_path)
-		self.writer = SummaryWriter(comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, self.num_labels, B_train, weight_decay, dropout))
+		self.writer = SummaryWriter(log_dir= tensorboard_dir,
+									comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, self.num_labels, B_train, weight_decay, dropout))
 
 	def save(self, path):
 		params = {
@@ -77,6 +82,7 @@ class MultiLabelTextClassifier:
 		}
 
 		torch.save(params, path)
+		self.pretrained_path = path
 
 	@classmethod
 	def load(cls, path):
@@ -102,7 +108,7 @@ class MultiLabelTextClassifier:
 		return self
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder = 'gru', sent_encoder = 'gru',
-				   dim_caps=16, num_caps = 25, num_compressed_caps = 100):
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -122,6 +128,15 @@ class MultiLabelTextClassifier:
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+
+		# Initialize training attributes
+		if self.model_name.lower() == 'hcapsnet':
+			self.criterion = torch.nn.BCELoss()
+		else:
+			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='mean')
+
+		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
 		# Load embeddings
 		vectors = FastText(aligned=True, cache=vector_cache, language='en')
 		embed_table = get_embedding(vectors, self.word_to_idx)
@@ -212,22 +227,14 @@ class MultiLabelTextClassifier:
 
 	def train(self, dataloader_train, dataloader_dev, pos_weight, num_epochs, eval_every):
 
-		# # Get dataloaders for training and evaluation
-		# dataloader_train, dataloader_dev, pos_weight = self._get_dataloaders(train_path, dev_path)
-		if self.model_name.lower() == 'hcapsnet':
-			criterion = torch.nn.BCELoss()
-		else:
-			criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='mean') #TODO: change back to BCELossWithLogits for other models
-		optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay) # torch.optim.Adam(self.model.parameters(), lr=self.lr) #
-
 		# Train epoch
 		best_score, best_loss, train_step = (0,0,0)
 
 		for epoch in range(num_epochs):
 			torch.cuda.empty_cache()
 			self.logger.info("Epoch: {}".format(epoch))
-			best_score, best_loss, train_step = self._train_epoch(dataloader_train, dataloader_dev, optimizer,
-																  criterion, eval_every, train_step, best_score,
+			best_score, best_loss, train_step = self._train_epoch(dataloader_train, dataloader_dev, self.optimizer,
+																  self.criterion, eval_every, train_step, best_score,
 																  best_loss)
 
 	def _train_epoch(self, dataloader_train, dataloader_dev, optimizer, criterion, eval_every, train_step, best_score, best_loss):
@@ -243,7 +250,6 @@ class MultiLabelTextClassifier:
 			(sents, sents_len, doc_lens, target) = batch
 			preds, word_attention_scores, sent_attention_scores = self.model(sents, sents_len, doc_lens)
 
-			test = torch.isnan(preds)
 			loss = criterion(preds, target)
 			tr_loss += loss.item()
 
@@ -258,18 +264,18 @@ class MultiLabelTextClassifier:
 			torch.cuda.empty_cache()
 
 			if train_step % eval_every == 0:
-				best_score, best_loss = self._eval_model(dataloader_train, dataloader_dev, criterion, best_score, best_loss, train_step)
+				best_score, best_loss = self._eval_model(dataloader_train, dataloader_dev, best_score, best_loss, train_step)
 
 		return best_score, best_loss, train_step
 
 
-	def _eval_model(self, dataloader_train, dataloader_dev, criterion, best_score, best_loss, train_step):
+	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
 		# Eval dev
-		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev = self._eval_dataset(dataloader_dev, criterion, K=self.K)
+		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev = self.eval_dataset(dataloader_dev, K=self.K)
 
 		# Eval Train
-		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr = self._eval_dataset(dataloader_train, criterion, K=self.K,
-																	   max_samples=len(dataloader_dev))
+		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr = self.eval_dataset(dataloader_train, K=self.K,
+																			max_samples=len(dataloader_dev))
 
 		# Save model if best
 		if best_score < rp_k_dev:
@@ -284,9 +290,6 @@ class MultiLabelTextClassifier:
 
 			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
 
-			# torch.save(self.model.state_dict(), os.path.join(self.save_dir,
-			# 											self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,
-			# 																					  self.K, rp_k_dev)))
 			self.logger.info("Saved model with new best loss: {0:.5f}".format(avg_loss_dev))
 
 		# Write to Tensorboard
@@ -315,7 +318,7 @@ class MultiLabelTextClassifier:
 
 		return best_score, best_loss
 
-	def _eval_dataset(self, dataloader, criterion, K=5, max_samples=None):
+	def eval_dataset(self, dataloader, K=5, max_samples=None):
 		self.logger.info("Evaluating model")
 		self.model.eval()
 		y_pred = []
@@ -329,7 +332,7 @@ class MultiLabelTextClassifier:
 				(sents, sents_len, doc_lens, target) = batch
 
 				preds, _, _ = self.model(sents, sents_len, doc_lens)
-				loss = criterion(preds, target)
+				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets
 				y_pred.extend(list(preds.cpu().detach().numpy()))
@@ -357,38 +360,3 @@ class MultiLabelTextClassifier:
 
 		return r_k, p_k, rp_k, ndcg_k, avg_loss
 
-	def _get_dataloaders(self, train_path, dev_path):
-
-		self.logger.info("Loading data...")
-		# load docs into memory
-		with open(train_path, 'rb') as f:
-			train_docs = pickle.load(f)
-
-		with open(dev_path, 'rb') as f:
-			dev_docs = pickle.load(f)
-
-		# Load dataset
-		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=self.word_to_idx,
-																		label_to_idx=self.label_to_idx,
-																		min_freq_word=self.min_freq_word)
-		pos_weight = [v / len(train_dataset) for k, v in tag_counter_train.items()]
-		dataloader_train = get_data_loader(train_dataset, self.B_train, True)
-
-		# Save word_mapping
-		if self.word_to_idex_path:
-			with open(self.word_to_idx_path, 'w') as f:
-				json.dump(word_to_idx, f)
-
-		# Free some memory
-		del train_dataset
-		del train_docs
-
-		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx,
-																	label_to_idx=self.label_to_idx,
-																	min_freq_word=self.min_freq_word)
-		dataloader_dev = get_data_loader(dev_dataset, self.B_eval, False)
-		# Free some memory
-		del dev_dataset
-		del dev_docs
-
-		return dataloader_train, dataloader_dev, pos_weight
