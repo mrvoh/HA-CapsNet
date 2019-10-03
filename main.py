@@ -14,8 +14,7 @@ from pstats import SortKey
 
 from data_utils import process_dataset, get_data_loader, get_embedding
 from text_class_learner import MultiLabelTextClassifier
-from eur_lex57k_parsing import parse as eur_lex_parse
-
+from eur_lex57k_to_doc import parse as eur_lex_parse
 
 
 if __name__ == '__main__':
@@ -47,11 +46,11 @@ if __name__ == '__main__':
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
-						default=16,
+						default=20,
 						type=int,
 						help="Total batch size for training.")
 	parser.add_argument("--eval_batch_size",
-						default=32,
+						default=20,
 						type=int,
 						help="Total batch size for eval.")
 	parser.add_argument("--learning_rate",
@@ -59,7 +58,7 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.25,
+						default=0.0,
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--num_train_epochs",
@@ -67,7 +66,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Total number of training epochs to perform.")
 	parser.add_argument("--eval_every",
-						default=2500,
+						default=2000,
 						type=int,
 						help="Nr of training updates before evaluating model")
 	parser.add_argument("--K",
@@ -81,17 +80,17 @@ if __name__ == '__main__':
 
 	#  MODEL ARGS
 	parser.add_argument("--model_name",
-						default='HCapsNet',
+						default='HAN',#MultiHeadAtt',
 						type=str,
 						required=False,
-						help="Model to use. Options: HAN, HGRULWAN & HCapsNet")
+						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
 	parser.add_argument("--word_encoder",
 					   default='gru',
 					   type=str,
 					   required=False,
 					   help="The path from where the class-names are to be retrieved.")
 	parser.add_argument("--sent_encoder",
-						default='gru',
+						default='transformer',
 						type=str,
 						required=False,
 						help="The path from where the class-names are to be retrieved.")
@@ -104,7 +103,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=50,
+						default=80,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 
@@ -124,7 +123,7 @@ if __name__ == '__main__':
 
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_false',
+						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--raw_data_dir",
 						default='dataset',
@@ -145,6 +144,11 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="Where to write the parsed data to.")
+	parser.add_argument("--num_backtranslations",
+						default=5,
+						type=int,
+						help="Number of times to backtranslate each document as means of data augmentation. Set to None for no backtranslation.")
+
 
 	parser.add_argument("--train_path",
 						default=os.path.join('dataset', 'train_500.pkl'),
@@ -233,7 +237,7 @@ if __name__ == '__main__':
 	###########################################################################
 
 	if args.preprocess_all:
-		train_path, dev_path, test_path = eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags)
+		train_path, dev_path, test_path = eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
 
 	###########################################################################
 	# DATA LOADING
@@ -285,7 +289,6 @@ if __name__ == '__main__':
 	###########################################################################
 	# TRAIN MODEL
 	###########################################################################
-	if args.do_train:
 		# Init model
 		if args.pretrained_path:
 			TextClassifier = MultiLabelTextClassifier.load(args.pretrained_path)

@@ -81,7 +81,9 @@ class AttentionWordEncoder(nn.Module):
 			word_out = 2* word_hidden if bidirectional else word_hidden
 			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
-			encoder_layer = nn.TransformerEncoderLayer(word_hidden, nhead, 2*word_hidden, dropout)
+			# TEST
+			encoder_layer = TransformerCapsEncoderLayer(word_hidden, nhead, 2 * word_hidden, dropout)
+			# encoder_layer = nn.TransformerEncoderLayer(word_hidden, nhead, 2*word_hidden, dropout)
 			self.word_encoder = TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
 
 			word_out = word_hidden
@@ -133,11 +135,10 @@ class AttentionSentEncoder(nn.Module):
 			sent_out = 2 * sent_hidden if bidirectional else sent_hidden
 			self.sent_encoder = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
-			encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
+			# encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
+			# TEST
+			encoder_layer = TransformerCapsEncoderLayer(word_out, sent_hidden, nhead, sent_hidden, dropout)
 			self.sent_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
-
-			encoder_layer = nn.TransformerEncoderLayer(sent_hidden, nhead, 2 * sent_hidden, dropout)
-			self.word_encoder = TransformerEncoder(word_out, sent_hidden, encoder_layer, num_layers)
 
 			sent_out = sent_hidden
 
@@ -155,7 +156,7 @@ class AttentionSentEncoder(nn.Module):
 			x, _ = self.sent_encoder(self.drop1(x.permute(1,0,2)))
 			x = x.permute(1,0,2)
 		elif self.encoder_type.lower() == 'transformer':
-			x = self.sent_encoder(self.drop1(x))
+			x = self.sent_encoder(x)
 
 		# compute attention
 		Hw = torch.tanh(self.weight_W_sent(x))
@@ -167,40 +168,40 @@ class AttentionSentEncoder(nn.Module):
 		return doc_encoding, sent_attn_norm
 
 
-class GRULWAN(nn.Module):
+class GRUMultiHeadAtt(nn.Module):
 	""""
 	GRU with LabelWise Attention Network
 	"""
 
-	def __init__(self, sent_gru_hidden, word_gru_hidden, n_classes, bidirectional=True, dropout=0.1):
-		super(GRULWAN, self).__init__()
+	def __init__(self, sent_hidden, word_out, num_att_heads, bidirectional=True, dropout=0.1, aggregate_output = True):
+		super(GRUMultiHeadAtt, self).__init__()
 
 		# self.batch_size = batch_size
-		self.sent_gru_hidden = sent_gru_hidden
-		self.n_classes = n_classes
-		self.word_gru_hidden = word_gru_hidden
+		self.sent_gru_hidden = sent_hidden
+		self.num_att_heads = num_att_heads
+		self.word_out = word_out
 		self.bidirectional = bidirectional
 		self.dropout = dropout
+		self.aggregate_output = aggregate_output
 
-		word_gru_out = 2 * word_gru_hidden if bidirectional else word_gru_hidden
-		sent_gru_out = 2 * sent_gru_hidden if bidirectional else sent_gru_hidden
+		sent_gru_out = 2 * sent_hidden if bidirectional else sent_hidden
 
 		self.score_normalizer = np.sqrt(sent_gru_out)
 
-		self.sent_gru = nn.GRU(word_gru_out, sent_gru_hidden, bidirectional=bidirectional)
-		self.U = nn.Linear(sent_gru_out, n_classes)
-		self.out = nn.Parameter(
-			torch.Tensor(n_classes, sent_gru_out))  # nn.Parameter(torch.Tensor(2*sent_gru_hidden, n_classes))
+		self.sent_gru = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
+		self.U = nn.Linear(sent_gru_out, num_att_heads)
 
-		self.out.data.normal_(0, 1 / np.sqrt(sent_gru_out))
 		self.softmax_sent = nn.Softmax(dim=1)
 
 		# Regularization
-		self.bn1 = nn.BatchNorm1d(word_gru_out)
+		self.bn1 = nn.BatchNorm1d(word_out)
 		self.drop1 = nn.Dropout(dropout)
+		if self.aggregate_output:
+			self.bn2 = nn.BatchNorm1d(sent_gru_out)
+			self.drop2 = nn.Dropout(dropout)
 
-		self.bn2 = nn.BatchNorm1d(sent_gru_out)
-		self.drop2 = nn.Dropout(dropout)
+			self.out = nn.Parameter(torch.Tensor(num_att_heads, sent_gru_out))
+			self.out.data.normal_(0, 1 / np.sqrt(sent_gru_out))
 
 	def forward(self, word_attention_vectors):
 		B, N, d_c = word_attention_vectors.size()
@@ -215,15 +216,19 @@ class GRULWAN(nn.Module):
 			H) / self.score_normalizer)  # TODO: check performance when scores are discounted --> inspired by transformer
 		# Get labelwise representations of doc
 		attention_expanded = torch.repeat_interleave(A, d_c, dim=2)
-		H_expanded = H.repeat(1, 1, self.n_classes)
+		H_expanded = H.repeat(1, 1, self.num_att_heads)
 
-		V = (attention_expanded * H_expanded).view(N, B, self.n_classes, d_c).sum(dim=0)
-		V = self.drop2(self.bn2(V.permute(0, 2, 1))).permute(0, 2, 1)
+		V = (attention_expanded * H_expanded).view(N, B, self.num_att_heads, d_c).sum(dim=0)
+		if not self.aggregate_output:
+			return V, A
+		else:
+			# V = V.sum(dim=0)
+			V = self.drop2(self.bn2(V.permute(0, 2, 1))).permute(0, 2, 1)
 
-		y = V.mul(self.out)
-		y = y.sum(dim=2)
+			y = V.mul(self.out)
+			y = y.sum(dim=2)
 
-		return y, A
+			return y, A
 
 
 ###################################################################################################
@@ -390,20 +395,20 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, num_classes, dim_caps, num_caps, num_compressed_caps):
+	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
 		self.input_size = input_size
+		self.in_channels = in_channels
 		self.num_caps = num_caps
 		self.num_compressed_caps = num_compressed_caps
 
 
-		self.primary_capsules_doc = PrimaryCaps(num_capsules=num_caps, in_channels=1, out_channels=dim_caps, kernel_size=1, stride=1)
+		self.primary_capsules_doc = PrimaryCaps(num_capsules=num_caps, in_channels=in_channels, out_channels=dim_caps, kernel_size=1, stride=1)
 
 		self.flatten_capsules = FlattenCaps()
 
-		#TODO: verify
 		self.W_doc = nn.Parameter(torch.FloatTensor( input_size * dim_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
 		torch.nn.init.xavier_uniform_(self.W_doc)
 
@@ -437,3 +442,54 @@ class CapsNet_Text(nn.Module):
 		poses, activations = self.fc_capsules_doc_child(poses, activations, labels) #parallel model is used for restricting solution space
 		# poses = poses.unsqueeze(2)
 		return poses, activations
+
+
+###################################################################################################
+# EXPERIMENT: Capsule Transformer
+###################################################################################################
+
+class TransformerCapsEncoderLayer(nn.Module):
+
+	def __init__(self, d_model, out_size, nhead, dim_feedforward=50, dropout=0.1):
+		super(TransformerCapsEncoderLayer, self).__init__()
+		self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+		# # Implementation of Feedforward model
+		#         # self.linear1 = Linear(d_model, dim_feedforward)
+		#         # self.dropout = Dropout(dropout)
+		#         # self.linear2 = Linear(dim_feedforward, d_model)
+		self.d_model = d_model
+		self.out_size = out_size
+		self.feedforward_caps = CapsNet_Text(d_model, 1, out_size, dim_caps=12, num_caps=8, num_compressed_caps=dim_feedforward)
+		self.scaling_param = nn.Parameter(torch.tensor([1e-8]))
+
+		self.norm1 = nn.LayerNorm(d_model)
+		self.norm2 = nn.LayerNorm(out_size)
+		self.dropout1 = nn.Dropout(dropout)
+		self.dropout2 = nn.Dropout(dropout)
+
+	def forward(self, src, src_mask=None, src_key_padding_mask=None):
+		r"""Pass the input through the endocder layer.
+
+		Args:
+			src: the sequnce to the encoder layer (required).
+			src_mask: the mask for the src sequence (optional).
+			src_key_padding_mask: the mask for the src keys per batch (optional).
+
+		Shape:
+			see the docs in Transformer class.
+		"""
+		src2 = self.self_attn(src, src, src, attn_mask=src_mask,
+							  key_padding_mask=src_key_padding_mask)[0]
+		src = src + self.dropout1(src2)
+		src = self.norm1(src)
+		B, N, d_c = src.size()
+		src = src.view(-1,1,self.d_model)
+		_, src2 = self.feedforward_caps(src)
+		src = self.dropout2(src2.squeeze(2)).view(B,N,self.out_size)
+
+		src = torch.log(src+self.scaling_param/(1-src+self.scaling_param))
+		src = self.norm2(src)
+
+		# src = src * torch.pow(10, self.scaling_param)
+
+		return src

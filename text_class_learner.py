@@ -10,7 +10,7 @@ import gc
 from torchnlp.encoders.text import stack_and_pad_tensors
 from scipy.special import expit
 
-from model import HAN, HGRULWAN, HCapsNet
+from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt
 from data_utils import process_dataset, get_data_loader, get_embedding, _convert_word_to_idx
 from radam import RAdam
 from logger import get_logger, Progbar
@@ -52,6 +52,7 @@ class MultiLabelTextClassifier:
 		self.embed_size = kwargs.get('embed_size', None)
 		self.word_hidden = kwargs.get('word_hidden', None)
 		self.sent_hidden = kwargs.get('sent_hidden', None)
+		self.nhead_doc = kwargs.get('nhead_doc', None)
 		self.word_encoder = kwargs.get('word_encoder', None)
 		self.sent_encoder = kwargs.get('sent_encoder', None)
 		self.pretrained_path = kwargs.get('pretrained_path', None)
@@ -67,6 +68,7 @@ class MultiLabelTextClassifier:
 									comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, self.num_labels, B_train, weight_decay, dropout))
 
 	def save(self, path):
+		self.pretrained_path = path
 		params = {
 			"model_name":self.model_name,
 			"word_to_idx":self.word_to_idx,
@@ -75,14 +77,18 @@ class MultiLabelTextClassifier:
 			"embed_size":self.embed_size,
 			"word_hidden":self.word_hidden,
 			"sent_hidden":self.sent_hidden,
+			"nhead_doc":self.nhead_doc,
 			"dropout":self.dropout,
 			"word_encoder":self.word_encoder,
 			"sent_encoder":self.sent_encoder,
+			"optimizer":self.optimizer,
+			"criterion":self.criterion,
+			"pretrained_path":self.pretrained_path,
 			"state_dict":self.model.state_dict()
 		}
 
 		torch.save(params, path)
-		self.pretrained_path = path
+
 
 	@classmethod
 	def load(cls, path):
@@ -100,6 +106,8 @@ class MultiLabelTextClassifier:
 			model = HGRULWAN(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 		elif params['model_name'].lower() == 'hcapsnet':
 			model = HCapsNet(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
+		elif params['model_name'].lower() == 'hcapsnetmultiheadatt':
+			model = HCapsNet(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
 		model.load_state_dict(params['state_dict'])
 		model.to(self.device)
@@ -108,7 +116,7 @@ class MultiLabelTextClassifier:
 		return self
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder = 'gru', sent_encoder = 'gru',
-				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None):
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=25):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -128,9 +136,13 @@ class MultiLabelTextClassifier:
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
+			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
+							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc)
 
 		# Initialize training attributes
-		if self.model_name.lower() == 'hcapsnet':
+		if 'caps' in self.model_name.lower():
 			self.criterion = torch.nn.BCELoss()
 		else:
 			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='mean')
