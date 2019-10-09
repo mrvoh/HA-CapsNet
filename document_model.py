@@ -6,6 +6,9 @@ LOGGER = logging.getLogger(__name__)
 import unicodedata
 # import sacremoses as sm
 import re
+from joblib import Parallel, delayed
+from textblob import TextBlob
+from textblob.translate import NotTranslated
 
 LANG_MAP= {
     'af': 'afrikaans',
@@ -197,6 +200,20 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
+def translate(comment, language):
+	if hasattr(comment, "decode"):
+		comment = comment.decode("utf-8")
+
+	text = TextBlob(comment)
+	try:
+		text = text.translate(to=language)
+		text = text.translate(to="en")
+	except NotTranslated:
+		print('NOT TRANSLATED')
+		pass
+
+	return str(text)
+
 class Tagger(object):
 
 
@@ -225,7 +242,7 @@ class Document:
 	#
 	# 	# SHORT_SEN_TRESH = 3
 
-	def __init__(self, text, tags, sentences=None, filename=None, discard_short_sents = True, split_size_long_seqs=50):
+	def __init__(self, text, tags, sentences=None, filename=None, restructure_doc = True, split_size_long_seqs=50):
 		"""
 		:param text: document text as a string
 		:param tags: list of Tag objects
@@ -233,7 +250,7 @@ class Document:
 
 
 
-		self.discard_short_sents = discard_short_sents
+		self.restructure_doc = restructure_doc # If set to True all sentences longer than split_size_long_seqs will be split and afterwards greedily merged to get length as close as possible to split_size_long_seqs
 		self.split_size_long_seqs = split_size_long_seqs
 		# print(text)
 		# self.tokens = [[token.text for token in sent] for sent in Document.tagger.tokenize_text(text)]
@@ -247,7 +264,8 @@ class Document:
 		# 	self.sentences = [sent for sent in self.sentences if len(sent) > self.SHORT_SEN_TRESH]
 
 		# Split seqs longer than split_size_long_seqs for computational efficiency
-		self._split_long_seqs()
+		if self.restructure_doc:
+			self._split_long_seqs()
 
 		self.tags = tags
 		self.text = text
@@ -255,8 +273,22 @@ class Document:
 
 	def back_translate(self, num_copies):
 
+		sents = [" ".join(sen) for sen in self.sentences]
 		copies = [Document(
-			text = Document.translator.backtranslate(Document.text, src='en', mid=LANGUAGES[i]).text,
+			sentences=[translate(sen, LANGUAGES[i]) for sen in sents],
+			text='',
+			tags=self.tags)
+			for i in range(num_copies)
+		]
+
+		return copies
+
+	def back_translate1(self, num_copies): #TODO: look into https://github.com/PavelOstyakov/toxic/blob/master/tools/extend_dataset.py
+
+		sents = [" ".join(sen) for sen in self.sentences]
+		copies = [Document(
+			sentences = [Document.translator.backtranslate(sen, src='en', mid=LANGUAGES[i]).text for sen in sents],
+			text = '',
 			tags=self.tags)
 			for i in range(num_copies)
 		]

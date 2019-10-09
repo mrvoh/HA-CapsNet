@@ -6,10 +6,12 @@ from document_model import Document
 
 class JSONLoader:
 
-    def __init__(self, hierarchical=True):
+    def __init__(self, hierarchical=True, restructure_doc=True, split_size_long_seqs=50):
         super(JSONLoader).__init__()
 
         self.hierarchical = hierarchical
+        self.restructure_doc= restructure_doc
+        self.split_size_long_seqs = split_size_long_seqs
 
     def read_text(self, text: str):
 
@@ -49,4 +51,4 @@ class JSONLoader:
         if not filename:
             filename = data['celex_id']
 
-        return Document(text, tags, sentences=sentences, filename=os.path.basename(filename))
+        return Document(text, tags, sentences=sentences, filename=os.path.basename(filename), restructure_doc=self.restructure_doc, split_size_long_seqs=self.split_size_long_seqs)

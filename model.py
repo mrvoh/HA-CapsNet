@@ -209,6 +209,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
         doc_encoding = self.drop(self.bn(doc_encoding.permute(0,2,1))).permute(0,2,1)
+        # doc_encoding = self.drop(self.bn(doc_encoding))
 
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)

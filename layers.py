@@ -82,8 +82,8 @@ class AttentionWordEncoder(nn.Module):
 			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
 			# TEST
-			encoder_layer = TransformerCapsEncoderLayer(word_hidden, nhead, 2 * word_hidden, dropout)
-			# encoder_layer = nn.TransformerEncoderLayer(word_hidden, nhead, 2*word_hidden, dropout)
+			# encoder_layer = TransformerCapsEncoderLayer(word_hidden, 1, 2 * word_hidden, dropout)
+			encoder_layer = nn.TransformerEncoderLayer(word_hidden, nhead, 2*word_hidden, dropout)
 			self.word_encoder = TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
 
 			word_out = word_hidden
@@ -135,9 +135,9 @@ class AttentionSentEncoder(nn.Module):
 			sent_out = 2 * sent_hidden if bidirectional else sent_hidden
 			self.sent_encoder = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
-			# encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
+			encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
 			# TEST
-			encoder_layer = TransformerCapsEncoderLayer(word_out, sent_hidden, nhead, sent_hidden, dropout)
+			# encoder_layer = TransformerCapsEncoderLayer(word_out, sent_hidden, nhead, sent_hidden, dropout)
 			self.sent_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
 
 			sent_out = sent_hidden
@@ -204,10 +204,11 @@ class GRUMultiHeadAtt(nn.Module):
 			self.out.data.normal_(0, 1 / np.sqrt(sent_gru_out))
 
 	def forward(self, word_attention_vectors):
-		B, N, d_c = word_attention_vectors.size()
+
 
 		word_attention_vectors = self.drop1(self.bn1(word_attention_vectors.permute(0, 2, 1))).permute(0, 2, 1)
 		output_sent, _ = self.sent_gru(word_attention_vectors)
+		B, N, d_c = output_sent.size()
 
 		H = output_sent.permute(1, 0, 2)
 		# Get labelwise attention scores per document
@@ -428,7 +429,7 @@ class CapsNet_Text(nn.Module):
 		poses, activations = self.fc_capsules_doc_child(poses)
 		return poses, activations
 
-	def forward_smart(self, data, labels): # Use when second model is used to limit label space to route for caps net
+	def forward_old(self, data, labels): # Use when second model is used to limit label space to route for caps net
 		# labels arg is preliminary prediction by other model
 		data = self.embed(data)
 		nets_doc_l = []

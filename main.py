@@ -46,7 +46,7 @@ if __name__ == '__main__':
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
-						default=20,
+						default=16,
 						type=int,
 						help="Total batch size for training.")
 	parser.add_argument("--eval_batch_size",
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.0,
+						default=0.2,
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--num_train_epochs",
@@ -80,17 +80,17 @@ if __name__ == '__main__':
 
 	#  MODEL ARGS
 	parser.add_argument("--model_name",
-						default='HAN',#MultiHeadAtt',
+						default='HCapsNetMultiHeadAtt',
 						type=str,
 						required=False,
 						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
 	parser.add_argument("--word_encoder",
-					   default='gru',
+					   default='transformer',
 					   type=str,
 					   required=False,
 					   help="The path from where the class-names are to be retrieved.")
 	parser.add_argument("--sent_encoder",
-						default='transformer',
+						default='gru',
 						type=str,
 						required=False,
 						help="The path from where the class-names are to be retrieved.")
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=50,
+						default=80,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
@@ -131,11 +131,11 @@ if __name__ == '__main__':
 						required=False,
 						help="Dir from where to parse the data.")
 	parser.add_argument("--num_tags",
-						default=200,
+						default=100,
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--dataset_name",
-						default='eur-lex57k',
+						default='reuters',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
@@ -145,23 +145,23 @@ if __name__ == '__main__':
 						required=False,
 						help="Where to write the parsed data to.")
 	parser.add_argument("--num_backtranslations",
-						default=5,
+						default=1,
 						type=int,
 						help="Number of times to backtranslate each document as means of data augmentation. Set to None for no backtranslation.")
 
 
 	parser.add_argument("--train_path",
-						default=os.path.join('dataset', 'train_500.pkl'),
+						default=os.path.join('dataset', 'reuters', 'train.pkl'),
 						type=str,
 						required=False,
 						help="The path from where the train dataset is to be retrieved.")
 	parser.add_argument("--dev_path",
-						default=os.path.join('dataset', 'dev_500.pkl'),
+						default=os.path.join('dataset', 'reuters', 'dev.pkl'),
 						type=str,
 						required=False,
 						help="The path from where the dev dataset is to be retrieved.")
 	parser.add_argument("--test_path",
-						default=os.path.join('dataset', 'test_500.pkl'),
+						default=os.path.join('dataset', 'reuters', 'test.pkl'),
 						type=str,
 						required=False,
 						help="The path from where the dev dataset is to be retrieved.")
@@ -179,12 +179,12 @@ if __name__ == '__main__':
 						required=False,
 						help="The path from where the word mapping is to be retrieved.")
 	parser.add_argument("--label_to_idx_path",
-						default=os.path.join('dataset', 'label_to_idx_500.json'),
+						default=os.path.join('dataset', 'reuters', 'label_to_idx.json'),
 						type=str,
 						required=False,
 						help="The path from where the label mapping is to be retrieved.")
 	parser.add_argument("--label_map_path",
-						default=os.path.join('dataset', 'label_map.json'),
+						default=None, #os.path.join('dataset', 'label_map.json'),
 						type=str,
 						required=False,
 						help="The path from where the mapping from label id to label description is loaded.")
@@ -213,6 +213,8 @@ if __name__ == '__main__':
 
 	use_rnn = args.word_encoder == 'gru'
 	train_path, dev_path, test_path = (args.train_path, args.dev_path, args.test_path)
+	label_to_idx_path = args.label_to_idx_path
+	label_map = None
 	# pr = cProfile.Profile()
 	# pr.enable()
 
@@ -237,18 +239,20 @@ if __name__ == '__main__':
 	###########################################################################
 
 	if args.preprocess_all:
-		train_path, dev_path, test_path = eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
+		label_to_idx_path, train_path, dev_path, test_path = \
+			eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
 
 	###########################################################################
 	# DATA LOADING
 	###########################################################################
-	with open(args.label_to_idx_path, 'r') as f:
+	with open(label_to_idx_path, 'r') as f:
 		# idx_to_label = json.load(f)
 		label_to_idx = json.load(f)
 
-	with open(args.label_map_path, 'r') as f:
-		# idx_to_label = json.load(f)
-		label_map = json.load(f)
+	if args.label_map_path:
+		with open(args.label_map_path, 'r') as f:
+			# idx_to_label = json.load(f)
+			label_map = json.load(f)
 	if args.preload_word_to_idx:
 		with open(args.word_to_idx_path, 'r') as f:
 			# idx_to_label = json.load(f)
