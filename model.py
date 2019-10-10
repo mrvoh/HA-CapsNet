@@ -38,29 +38,10 @@ class HAN(nn.Module):
     def set_embedding(self, embed_table):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
-    def forward_rnn(self, sents, sents_len, doc_lens):
 
-        sen_encodings, word_attn_weight = self.sent_encoder(sents)
+    def forward(self, sents, raw_sents, sents_len, doc_lens):
 
-        if self.word_contextualizer != self.sent_contextualizer:
-            sen_encodings = sen_encodings.permute(1,0,2)
-
-        sen_encodings = sen_encodings.split(split_size=doc_lens)
-        # stack and pad
-        sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
-        # get predictions
-        doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
-
-        doc_encoding = self.drop(self.bn(doc_encoding))
-
-        y_pred = self.out(doc_encoding)
-
-        return y_pred, word_attn_weight, sent_attn_weight #TODO: split out forward and predict fn for attn_weights?
-
-
-    def forward(self, sents, sents_len, doc_lens):
-
-        sen_encodings, word_attn_weight = self.sent_encoder(sents)
+        sen_encodings, word_attn_weight = self.sent_encoder(sents, raw_sents)
 
         # if self.word_contextualizer != self.sent_contextualizer:
         #     sen_encodings = sen_encodings.permute(1, 0, 2)

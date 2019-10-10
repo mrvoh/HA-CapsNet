@@ -19,8 +19,10 @@ import operator
 import pickle
 from collections import Counter
 from gensim.models import FastText
+from flair.data import Sentence
 
-
+UNK = '<UNK>'
+PAD = '<PAD>'
 # vectors = FastText(aligned=True, cache='.word_vectors_cache', language='es')
 
 def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5):
@@ -43,8 +45,8 @@ def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 3
 
 
 
-def get_embedding(vecs, word_to_idx):
-	embed_table = [vecs[key].numpy() for key in word_to_idx.keys()]
+def get_embedding(vecs, word_to_idx, embed_size):
+	embed_table = [vecs[key].numpy() if key in word_to_idx.keys() else np.random.rand(embed_size) for key in word_to_idx.keys()]
 	embed_table = np.array(embed_table, dtype=float)
 	return embed_table
 
@@ -86,9 +88,7 @@ def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 	with open(os.path.join(dataset_dir, dataset_name + '.pkl'), 'wb') as f:
 		pickle.dump(docs, f)
 
-# Parse dataset from [Documents]
-UNK = '<UNK>'
-PAD = '<PAD>'
+
 
 def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
 	try:
@@ -149,6 +149,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 		sample['tags'][tags] = 1
 		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
 		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
+		sample['raw_sents'] = [' '.join(sen) for sen in doc.sentences]
 
 		dset.append(sample)
 
@@ -157,15 +158,13 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 # Collate function
 def collate_fn_rnn(batch):
 
-	test = [sent for doc in batch for sent in doc['sents']]
+	raw_sents_batch = [Sentence(sen) for doc in batch for sen in doc['raw_sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
 	doc_lens_batch = [len(doc['sents']) for doc in batch]
 
 
 	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
 	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
-	# sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
-	# word_len_batch, _ = stack_and_pad_tensors([seq['word_len'] for seq in batch])
 
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 	sents_batch = sents_batch.to(device)
@@ -177,7 +176,7 @@ def collate_fn_rnn(batch):
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)
+	return (transpose(sents_batch), raw_sents_batch, sents_len_batch, doc_lens_batch, tags_batch)
 
 def collate_fn_transformer(batch):
 

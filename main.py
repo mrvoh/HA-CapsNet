@@ -46,7 +46,7 @@ if __name__ == '__main__':
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
-						default=32,
+						default=10,
 						type=int,
 						help="Total batch size for training.")
 	parser.add_argument("--eval_batch_size",
@@ -166,11 +166,11 @@ if __name__ == '__main__':
 						required=False,
 						help="The path from where the dev dataset is to be retrieved.")
 	parser.add_argument("--create_wordvecs",
-						action='store_false',
+						action='store_true',
 						help="Whether to create custom word vectors using FastText.")
 	parser.add_argument("--word_vec_path",
-						default='dataset\\reuters\\fasttext.model',
-						# "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache",
+						default='word vectors\\wiki-news-300d-1M-subword.vec',
+						# default = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache\\wiki.multi.en.vec.pt",
 						type=str,
 						required=False,
 						help="Folder where vector caches are stored.")
@@ -312,7 +312,7 @@ if __name__ == '__main__':
 													  B_train=args.train_batch_size, word_encoder = args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay, lr=args.learning_rate)
 
-			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.vector_cache,
+			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.word_vec_path,
 									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder, pos_weight=pos_weight)
 
 		# Train

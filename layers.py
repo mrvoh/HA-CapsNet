@@ -5,6 +5,11 @@ from torch.autograd import Variable
 import numpy as np
 import copy
 from transformer import Encoder as TransformerEncoder
+from flair.embeddings import StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
+from torchnlp.encoders.text import stack_and_pad_tensors
+
+def chunker(seq, size):
+    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 def _get_clones(module, N):
 	return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -66,7 +71,7 @@ class TransformerEncoder(nn.Module):
 
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 num_layers = 1, nhead = 4):
+				 num_layers = 1, nhead = 4, use_bert = True):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -75,7 +80,15 @@ class AttentionWordEncoder(nn.Module):
 		self.dropout = dropout
 		self.lookup = nn.Embedding(num_tokens, embed_size)
 		self.encoder_type = encoder_type
+		self.use_bert = use_bert
 
+		extra_emb_dim = 0
+		if use_bert:
+			self.bert_embedding = BertEmbeddings('bert-base-multilingual-cased', layers='-1')
+			# self.bert_embedding = FlairEmbeddings('news-forward')
+			extra_emb_dim += 768
+
+		embed_size += extra_emb_dim
 		if encoder_type.lower() == 'gru':
 			self.bidirectional = bidirectional
 			word_out = 2* word_hidden if bidirectional else word_hidden
@@ -97,10 +110,26 @@ class AttentionWordEncoder(nn.Module):
 		self.drop2 = nn.Dropout(dropout)
 		self.weight_proj_word.data.normal_(0, 1 / np.sqrt(word_out))
 
-	def forward(self, x):
+
+
+	def forward(self, x, text):
 
 		# embeddings
 		x_emb = self.lookup(x)
+		N,B,d_c = x_emb.shape
+
+		if self.use_bert: # Get extra embeddings
+
+			# self.bert_embedding.embed(text)
+			[self.bert_embedding.embed(t) for t in chunker(text, 64)]
+			# t = [tok.embedding for tok in text[0]]
+			extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
+			extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
+			extra_embeddings = extra_embeddings.to(x_emb.device)
+
+			x_emb = torch.cat([x_emb, extra_embeddings.permute(1,0,2)],dim=2)
+
+
 		if self.encoder_type.lower() == 'gru':
 			x1, _ = self.word_encoder(self.drop1(x_emb))
 		elif self.encoder_type.lower() == 'transformer':
