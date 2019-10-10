@@ -2,7 +2,7 @@ import torch
 import os
 import pickle
 import json
-from torchnlp.word_to_vector import FastText
+# from torchnlp.word_to_vector import FastText
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -16,6 +16,7 @@ from radam import RAdam
 from logger import get_logger, Progbar
 from metrics import *
 from document_model import Document
+from gensim.models import FastText
 
 try:
 	from apex import amp
@@ -34,7 +35,10 @@ class MultiLabelTextClassifier:
 		self.model = None
 		self.word_to_idx = word_to_idx
 		self.label_to_idx = label_to_idx # Maps label_ids to index in model
-		self.label_map = label_map # Maps label ids to EUROVOC description
+		if label_map:
+			self.label_map = label_map
+		else:
+			self.label_map = {v:k for k,v in label_to_idx.items()}# Maps label ids to EUROVOC description
 		self.log_path = kwargs.get('log_path', 'log.txt')
 		self.save_dir = kwargs.get('save_dir', None) #TODO: use save_dir
 		self.tensorboard_dir = tensorboard_dir
@@ -107,7 +111,7 @@ class MultiLabelTextClassifier:
 		elif params['model_name'].lower() == 'hcapsnet':
 			model = HCapsNet(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 		elif params['model_name'].lower() == 'hcapsnetmultiheadatt':
-			model = HCapsNet(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
+			model = HCapsNetMultiHeadAtt(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
 		model.load_state_dict(params['state_dict'])
 		model.to(self.device)
@@ -115,7 +119,7 @@ class MultiLabelTextClassifier:
 
 		return self
 
-	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_cache, word_encoder = 'gru', sent_encoder = 'gru',
+	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=5):
 
 		self.embed_size = embed_dim
@@ -150,7 +154,7 @@ class MultiLabelTextClassifier:
 		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
 		# Load embeddings
-		vectors = FastText(aligned=True, cache=vector_cache, language='en')
+		vectors = FastText.load(vector_path)
 		embed_table = get_embedding(vectors, self.word_to_idx)
 		self.model.set_embedding(embed_table)
 
@@ -356,7 +360,10 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		template = 'R@{} : {:1.3f}   P@{} : {:1.3f}   RP@{} : {:1.3f}   NDCG@{} : {:1.3f}'
+		acc = accuracy(y_true, y_pred, False)
+
+		self.logger.info("Accuracy: {:1.3f}".format(acc))
+		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		for i in range(1, K + 1):
 			r_k = mean_recall_k(y_true,
@@ -367,7 +374,9 @@ class MultiLabelTextClassifier:
 									 y_pred, k=i)
 			ndcg_k = mean_ndcg_score(y_true,
 									 y_pred, k=i)
-			self.logger.info(template.format(i, r_k, i, p_k, i, rp_k, i, ndcg_k))
+
+			f1_k = (2*r_k*p_k)/(r_k+p_k)
+			self.logger.info(template.format(i, f1_k, r_k, p_k, rp_k, ndcg_k))
 		self.logger.info('----------------------------------------------------')
 
 		return r_k, p_k, rp_k, ndcg_k, avg_loss

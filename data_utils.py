@@ -1,4 +1,4 @@
-from torchnlp.word_to_vector import FastText
+# from torchnlp.word_to_vector import FastText
 from urllib.request import urlopen
 from torchnlp.datasets import Dataset
 from torchnlp.samplers import BucketBatchSampler
@@ -18,9 +18,30 @@ from json_loader import JSONLoader
 import operator
 import pickle
 from collections import Counter
+from gensim.models import FastText
 
 
 # vectors = FastText(aligned=True, cache='.word_vectors_cache', language='es')
+
+def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5):
+	# Read in docs
+	with open(in_path, 'rb') as f:
+		docs = pickle.load(f)
+
+	# Train word embeddings
+	if not fasttext_path:
+		fasttext = FastText(size=word_vec_dim, window=5, min_count=min_count)
+	else:
+		fasttext = FastText.load(fasttext_path)
+
+	tokens = [sen for doc in docs for sen in doc.sentences]
+	fasttext.build_vocab(tokens, update=fasttext.corpus_count != 0)
+
+	fasttext.train(sentences=tokens, total_examples=fasttext.corpus_count, epochs=5000, ns=10, iter=10, threads=24)
+	# Save model
+	fasttext.save(out_path)
+
+
 
 def get_embedding(vecs, word_to_idx):
 	embed_table = [vecs[key].numpy() for key in word_to_idx.keys()]
@@ -160,7 +181,7 @@ def collate_fn_rnn(batch):
 
 def collate_fn_transformer(batch):
 
-	test = [sent for doc in batch for sent in doc['sents']]
+	# test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
 	doc_lens_batch = [len(doc['sents']) for doc in batch]
 

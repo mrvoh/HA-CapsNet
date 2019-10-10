@@ -12,7 +12,7 @@ import gc
 import cProfile, pstats, io
 from pstats import SortKey
 
-from data_utils import process_dataset, get_data_loader, get_embedding
+from data_utils import process_dataset, get_data_loader, embeddings_from_docs
 from text_class_learner import MultiLabelTextClassifier
 from eur_lex57k_to_doc import parse as eur_lex_parse
 
@@ -46,11 +46,11 @@ if __name__ == '__main__':
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
-						default=16,
+						default=32,
 						type=int,
 						help="Total batch size for training.")
 	parser.add_argument("--eval_batch_size",
-						default=20,
+						default=32,
 						type=int,
 						help="Total batch size for eval.")
 	parser.add_argument("--learning_rate",
@@ -58,19 +58,19 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.2,
+						default=0.15,
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--num_train_epochs",
-						default=5,
+						default=10,
 						type=int,
 						help="Total number of training epochs to perform.")
 	parser.add_argument("--eval_every",
-						default=2000,
+						default=150,
 						type=int,
 						help="Nr of training updates before evaluating model")
 	parser.add_argument("--K",
-						default=5,
+						default=1,
 						type=int,
 						help="Cut-off value for evaluation metrics")
 	parser.add_argument("--weight_decay",
@@ -80,12 +80,12 @@ if __name__ == '__main__':
 
 	#  MODEL ARGS
 	parser.add_argument("--model_name",
-						default='HCapsNetMultiHeadAtt',
+						default='han',#'HCapsNetMultiHeadAtt',
 						type=str,
 						required=False,
 						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
 	parser.add_argument("--word_encoder",
-					   default='transformer',
+					   default='gru',
 					   type=str,
 					   required=False,
 					   help="The path from where the class-names are to be retrieved.")
@@ -99,11 +99,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=80,
+						default=256,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=80,
+						default=256,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 
@@ -113,11 +113,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of a capsule")
 	parser.add_argument("--num_caps",
-						default=32,
+						default=48,
 						type=int,
 						help="Number of capsules in Primary Capsule Layer")
 	parser.add_argument("--num_compressed_caps",
-						default=100,
+						default=200,
 						type=int,
 						help="Number of compressed capsules")
 
@@ -165,8 +165,12 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="The path from where the dev dataset is to be retrieved.")
-	parser.add_argument("--vector_cache",
-						default="D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache",
+	parser.add_argument("--create_wordvecs",
+						action='store_false',
+						help="Whether to create custom word vectors using FastText.")
+	parser.add_argument("--word_vec_path",
+						default='dataset\\reuters\\fasttext.model',
+						# "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache",
 						type=str,
 						required=False,
 						help="Folder where vector caches are stored.")
@@ -189,7 +193,7 @@ if __name__ == '__main__':
 						required=False,
 						help="The path from where the mapping from label id to label description is loaded.")
 	parser.add_argument("--min_freq_word",
-						default=50,
+						default=5,
 						type=int,
 						help="Minimum nr of occurrences before being assigned a word vector")
 
@@ -214,6 +218,7 @@ if __name__ == '__main__':
 	use_rnn = args.word_encoder == 'gru'
 	train_path, dev_path, test_path = (args.train_path, args.dev_path, args.test_path)
 	label_to_idx_path = args.label_to_idx_path
+	word_vec_path = args.word_vec_path
 	label_map = None
 	# pr = cProfile.Profile()
 	# pr.enable()
@@ -241,6 +246,10 @@ if __name__ == '__main__':
 	if args.preprocess_all:
 		label_to_idx_path, train_path, dev_path, test_path = \
 			eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
+
+	if args.create_wordvecs: # Create word vectors from train documents
+		print('Creating word vectors')
+		embeddings_from_docs(train_path, word_vec_path, word_vec_dim=args.embed_dim)
 
 	###########################################################################
 	# DATA LOADING

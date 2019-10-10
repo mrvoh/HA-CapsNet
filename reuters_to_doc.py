@@ -20,6 +20,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seq
 	for dataset, name in [(train_ids, 'train'), (dev_ids, 'dev'), (test_ids, 'test')]:
 
 		docs = [Document(text='',
+						 filename = doc_id,
 						 sentences=[' '.join(sen) for sen in reuters.sents(doc_id)],
 						 tags=reuters.categories(doc_id),
 						 restructure_doc=restructure_doc,
@@ -41,4 +42,4 @@ def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seq
 
 if __name__ == '__main__':
 
-	parse('dataset\\reuters', 0.7)
+	parse('dataset\\reuters', 0.9)

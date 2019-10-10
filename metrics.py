@@ -3,6 +3,30 @@
 
 import numpy as np
 
+def accuracy(y_true, y_pred, convert_logits):
+
+	if isinstance(y_pred, list):
+		y_pred = np.array(y_pred)
+
+	if isinstance(y_true, list):
+		y_true = np.array(y_true)
+
+	if not convert_logits:
+		y_pred = (y_pred > 0.5).astype(int)
+	else:
+		y_pred = (y_pred > 0).astype(int)
+
+	n_correct = np.sum(np.all(y_true == y_pred, axis=1))
+	n_rows = y_true.shape[0]
+	accuracy = n_correct / n_rows
+	# accuracy = np.sum(y_pred == y_true) / y_true.size
+
+	return accuracy
+
+
+
+
+
 
 def mean_precision_k(y_true, y_score, k=10):
 	"""Mean precision at rank k

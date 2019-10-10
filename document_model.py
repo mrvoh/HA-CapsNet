@@ -309,6 +309,9 @@ class Document:
 				sents.append(curr_sen)
 				curr_sen = []
 
+		if curr_sen != []:
+			sents.append(curr_sen)
+
 		self.sentences = sents
 
 	def _split_long_seqs(self):
@@ -346,7 +349,6 @@ class Document:
 		final = [[tok for tok in sen if tok != ''] for sen in final]
 
 		# Merge small sentences back together
-
 		self.sentences = final
 		self._merge_short_seqs()
 
@@ -354,3 +356,10 @@ class Document:
 
 		res = "Doc name: {}\n Text: {}".format(self.filename, "\n".join([" ".join(sen) for sen in self.sentences]))
 		return res
+
+
+if __name__ == '__main__':
+
+	sen = ['AFFILIATED PUBLICATIONS INC & lt ; AFP > SETS PAYOUT Qtrly div eight cts vs eight cts prior Pay June 1 Record May 15']
+	d = Document('','',sentences=sen)
+	print(d.sentences)
