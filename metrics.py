@@ -16,10 +16,14 @@ def accuracy(y_true, y_pred, convert_logits):
 	else:
 		y_pred = (y_pred > 0).astype(int)
 
-	n_correct = np.sum(np.all(y_true == y_pred, axis=1))
-	n_rows = y_true.shape[0]
-	accuracy = n_correct / n_rows
+	# n_correct = np.sum(np.all(y_true == y_pred, axis=1))
+	# n_rows = y_true.shape[0]
+	# accuracy = n_correct / n_rows
 	# accuracy = np.sum(y_pred == y_true) / y_true.size
+
+	n_correct = np.sum((y_true == y_pred) & (y_true == 1))
+	n_total = np.sum(y_true == 1) + np.sum(y_pred == 1)
+	accuracy = 2*n_correct / n_total
 
 	return accuracy
 

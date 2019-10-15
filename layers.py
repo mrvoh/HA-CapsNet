@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 import copy
 from transformer import Encoder as TransformerEncoder
-from flair.embeddings import StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
+from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
 
 def chunker(seq, size):
@@ -71,7 +71,7 @@ class TransformerEncoder(nn.Module):
 
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 num_layers = 1, nhead = 4, use_bert = True):
+				 num_layers = 1, nhead = 4, use_bert = False):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -84,9 +84,10 @@ class AttentionWordEncoder(nn.Module):
 
 		extra_emb_dim = 0
 		if use_bert:
-			self.bert_embedding = BertEmbeddings('bert-base-multilingual-cased', layers='-1')
+			self.bert_embedding = WordEmbeddings('glove') #BertEmbeddings('distilbert-base-uncased-distilled-squad', layers='-1')
+
 			# self.bert_embedding = FlairEmbeddings('news-forward')
-			extra_emb_dim += 768
+			extra_emb_dim += 100
 
 		embed_size += extra_emb_dim
 		if encoder_type.lower() == 'gru':
@@ -112,7 +113,7 @@ class AttentionWordEncoder(nn.Module):
 
 
 
-	def forward(self, x, text):
+	def forward(self, x):
 
 		# embeddings
 		x_emb = self.lookup(x)
@@ -121,7 +122,7 @@ class AttentionWordEncoder(nn.Module):
 		if self.use_bert: # Get extra embeddings
 
 			# self.bert_embedding.embed(text)
-			[self.bert_embedding.embed(t) for t in chunker(text, 64)]
+			[self.bert_embedding.embed(t) for t in chunker(text, 10**6)]
 			# t = [tok.embedding for tok in text[0]]
 			extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
 			extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
@@ -202,12 +203,12 @@ class GRUMultiHeadAtt(nn.Module):
 	GRU with LabelWise Attention Network
 	"""
 
-	def __init__(self, sent_hidden, word_out, num_att_heads, bidirectional=True, dropout=0.1, aggregate_output = True):
+	def __init__(self, sent_hidden, word_out, nhead_doc, bidirectional=True, dropout=0.1, aggregate_output = True):
 		super(GRUMultiHeadAtt, self).__init__()
 
 		# self.batch_size = batch_size
 		self.sent_gru_hidden = sent_hidden
-		self.num_att_heads = num_att_heads
+		self.nhead_doc = nhead_doc
 		self.word_out = word_out
 		self.bidirectional = bidirectional
 		self.dropout = dropout
@@ -218,7 +219,7 @@ class GRUMultiHeadAtt(nn.Module):
 		self.score_normalizer = np.sqrt(sent_gru_out)
 
 		self.sent_gru = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
-		self.U = nn.Linear(sent_gru_out, num_att_heads)
+		self.U = nn.Linear(sent_gru_out, nhead_doc)
 
 		self.softmax_sent = nn.Softmax(dim=1)
 
@@ -229,7 +230,7 @@ class GRUMultiHeadAtt(nn.Module):
 			self.bn2 = nn.BatchNorm1d(sent_gru_out)
 			self.drop2 = nn.Dropout(dropout)
 
-			self.out = nn.Parameter(torch.Tensor(num_att_heads, sent_gru_out))
+			self.out = nn.Parameter(torch.Tensor(nhead_doc, sent_gru_out))
 			self.out.data.normal_(0, 1 / np.sqrt(sent_gru_out))
 
 	def forward(self, word_attention_vectors):
@@ -246,9 +247,9 @@ class GRUMultiHeadAtt(nn.Module):
 			H) / self.score_normalizer)  # TODO: check performance when scores are discounted --> inspired by transformer
 		# Get labelwise representations of doc
 		attention_expanded = torch.repeat_interleave(A, d_c, dim=2)
-		H_expanded = H.repeat(1, 1, self.num_att_heads)
+		H_expanded = H.repeat(1, 1, self.nhead_doc)
 
-		V = (attention_expanded * H_expanded).view(N, B, self.num_att_heads, d_c).sum(dim=0)
+		V = (attention_expanded * H_expanded).view(N, B, self.nhead_doc, d_c).sum(dim=0)
 		if not self.aggregate_output:
 			return V, A
 		else:

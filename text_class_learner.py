@@ -16,12 +16,9 @@ from radam import RAdam
 from logger import get_logger, Progbar
 from metrics import *
 from document_model import Document
-# from gensim.models import FastText
-import gensim
-# from gensim.models.keyedvectors import load_word2vec_format
-from gensim.models.fasttext import load_facebook_model
-from gensim.models import KeyedVectors
+import fasttext
 from torchnlp.word_to_vector.pretrained_word_vectors import _PretrainedWordVectors
+from flair.embeddings import WordEmbeddings
 
 try:
 	from apex import amp
@@ -170,7 +167,7 @@ class MultiLabelTextClassifier:
 
 		return self
 
-	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
+	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, use_glove, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=5):
 
 		self.embed_size = embed_dim
@@ -205,14 +202,10 @@ class MultiLabelTextClassifier:
 		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
 		# Load embeddings
-		# try:
-		# 	vectors = FastText.load(vector_path)
-		# except:
-		# vectors = load_facebook_model(vector_path)
-		# vectors = load_word2vec_format(vector_path)
-		vectors = FastText(name=vector_path)
-		# vectors = KeyedVectors.load_word2vec_format(vector_path)
-		embed_table = get_embedding(vectors, self.word_to_idx, embed_dim)
+		vectors = fasttext.load_model(vector_path)
+
+		glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
+		embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
 		self.model.set_embedding(embed_table)
 
 		self.model.to(self.device)
@@ -320,8 +313,8 @@ class MultiLabelTextClassifier:
 			train_step += 1
 			optimizer.zero_grad()
 
-			(sents, raw_sents, sents_len, doc_lens, target) = batch
-			preds, word_attention_scores, sent_attention_scores = self.model(sents, raw_sents, sents_len, doc_lens)
+			(sents, sents_len, doc_lens, target) = batch
+			preds, word_attention_scores, sent_attention_scores = self.model(sents, sents_len, doc_lens)
 
 			loss = criterion(preds, target)
 			tr_loss += loss.item()

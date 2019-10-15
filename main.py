@@ -46,7 +46,7 @@ if __name__ == '__main__':
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
-						default=10,
+						default=16,
 						type=int,
 						help="Total batch size for training.")
 	parser.add_argument("--eval_batch_size",
@@ -58,15 +58,15 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.15,
+						default=0.4,
 						type=float,
-						help="The initial learning rate for Adam.")
+						help="The initial learning rate for RAdam.")
 	parser.add_argument("--num_train_epochs",
-						default=10,
+						default=15,
 						type=int,
 						help="Total number of training epochs to perform.")
 	parser.add_argument("--eval_every",
-						default=150,
+						default=500,
 						type=int,
 						help="Nr of training updates before evaluating model")
 	parser.add_argument("--K",
@@ -80,10 +80,13 @@ if __name__ == '__main__':
 
 	#  MODEL ARGS
 	parser.add_argument("--model_name",
-						default='han',#'HCapsNetMultiHeadAtt',
+						default='HCapsNet',#'HCapsNetMultiHeadAtt',
 						type=str,
 						required=False,
 						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
+	parser.add_argument("--use_glove",
+						action='store_false',
+						help="Whether to utilize additional GloVe embeddings next to FastText.")
 	parser.add_argument("--word_encoder",
 					   default='gru',
 					   type=str,
@@ -117,7 +120,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of capsules in Primary Capsule Layer")
 	parser.add_argument("--num_compressed_caps",
-						default=200,
+						default=500,
 						type=int,
 						help="Number of compressed capsules")
 
@@ -169,7 +172,7 @@ if __name__ == '__main__':
 						action='store_true',
 						help="Whether to create custom word vectors using FastText.")
 	parser.add_argument("--word_vec_path",
-						default='word vectors\\wiki-news-300d-1M-subword.vec',
+						default= 'word vectors\\cc.en.300.bin', #"word vectors\\custom-reuters.vec",
 						# default = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache\\wiki.multi.en.vec.pt",
 						type=str,
 						required=False,
@@ -312,7 +315,7 @@ if __name__ == '__main__':
 													  B_train=args.train_batch_size, word_encoder = args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay, lr=args.learning_rate)
 
-			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.word_vec_path,
+			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.word_vec_path, args.use_glove,
 									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder, pos_weight=pos_weight)
 
 		# Train

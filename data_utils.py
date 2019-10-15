@@ -18,35 +18,47 @@ from json_loader import JSONLoader
 import operator
 import pickle
 from collections import Counter
-from gensim.models import FastText
+import fasttext
 from flair.data import Sentence
 
 UNK = '<UNK>'
 PAD = '<PAD>'
-# vectors = FastText(aligned=True, cache='.word_vectors_cache', language='es')
+def doc_to_fasttext(in_path, out_path):
+	# Read in docs
+	with open(in_path, 'rb') as f:
+		docs = pickle.load(f)
+
+	with open(out_path, 'w') as f:
+		for doc in docs:
+			labels =
+			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
+
 
 def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5):
 	# Read in docs
 	with open(in_path, 'rb') as f:
 		docs = pickle.load(f)
 
+	# Write docs to temporary *.txt file for fasttext to train on
+	with open('tmp.txt', 'w') as f:
+		for doc in docs:
+			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
+
 	# Train word embeddings
-	if not fasttext_path:
-		fasttext = FastText(size=word_vec_dim, window=5, min_count=min_count)
-	else:
-		fasttext = FastText.load(fasttext_path)
+	model = fasttext.train_unsupervised('tmp.txt', dim=word_vec_dim, ) #TODO: hyperparams
 
-	tokens = [sen for doc in docs for sen in doc.sentences]
-	fasttext.build_vocab(tokens, update=fasttext.corpus_count != 0)
-
-	fasttext.train(sentences=tokens, total_examples=fasttext.corpus_count, epochs=5000, ns=10, iter=10, threads=24)
-	# Save model
-	fasttext.save(out_path)
+	model.save_model(out_path)
 
 
 
-def get_embedding(vecs, word_to_idx, embed_size):
-	embed_table = [vecs[key].numpy() if key in word_to_idx.keys() else np.random.rand(embed_size) for key in word_to_idx.keys()]
+
+def get_embedding(vecs, word_to_idx, embed_size, glove = None):
+	embed_table = [vecs[key] if key in word_to_idx.keys() else np.random.rand(embed_size) for key in sorted(word_to_idx.keys())]
+	if glove:
+		glove_emb = [Sentence(key) for key in sorted(word_to_idx.keys())]
+		[glove.embed(k) for k in glove_emb]
+		glove_emb = [tok.embedding for tok in glove_emb]
+		embed_table = [np.concatenate([x1,x2]) for x1, x2 in zip(embed_table, glove_emb)]
 	embed_table = np.array(embed_table, dtype=float)
 	return embed_table
 
@@ -149,7 +161,6 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 		sample['tags'][tags] = 1
 		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
 		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
-		sample['raw_sents'] = [' '.join(sen) for sen in doc.sentences]
 
 		dset.append(sample)
 
@@ -158,7 +169,6 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 # Collate function
 def collate_fn_rnn(batch):
 
-	raw_sents_batch = [Sentence(sen) for doc in batch for sen in doc['raw_sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
 	doc_lens_batch = [len(doc['sents']) for doc in batch]
 
@@ -176,7 +186,7 @@ def collate_fn_rnn(batch):
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(sents_batch), raw_sents_batch, sents_len_batch, doc_lens_batch, tags_batch)
+	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)
 
 def collate_fn_transformer(batch):
 

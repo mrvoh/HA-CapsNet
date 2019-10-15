@@ -39,9 +39,9 @@ class HAN(nn.Module):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
 
-    def forward(self, sents, raw_sents, sents_len, doc_lens):
+    def forward(self, sents, sents_len, doc_lens):
 
-        sen_encodings, word_attn_weight = self.sent_encoder(sents, raw_sents)
+        sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
         # if self.word_contextualizer != self.sent_contextualizer:
         #     sen_encodings = sen_encodings.permute(1, 0, 2)
@@ -71,8 +71,8 @@ class HGRULWAN(nn.Module):
             self.bidirectional = bidirectional
 
             self.sent_encoder = AttentionWordEncoder('gru', num_tokens, embed_size, word_gru_hidden, bidirectional, dropout=dropout)
-            self.doc_encoder = GRUMultiHeadAtt(sent_gru_hidden, word_gru_hidden, num_att_heads=num_classes,
-                                                bidirectional=bidirectional, dropout=dropout, aggregate_output=True)
+            self.doc_encoder = GRUMultiHeadAtt(sent_gru_hidden, word_gru_hidden, nhead_doc=num_classes,
+                                               bidirectional=bidirectional, dropout=dropout, aggregate_output=True)
 
         def set_embedding(self, embed_table):
             self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
@@ -135,7 +135,7 @@ class HCapsNet(nn.Module):
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
-        doc_encoding = self.drop(self.bn(doc_encoding)).unsqueeze(1)
+        doc_encoding = self.bn(doc_encoding).unsqueeze(1) #self.drop()
 
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
@@ -163,7 +163,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
                                                  bidirectional=bidirectional,
                                                  num_layers=num_layers_word, nhead=nhead_word
                                                  )
-        self.doc_encoder = GRUMultiHeadAtt(sent_hidden, word_out, num_att_heads=nhead_doc,
+        self.doc_encoder = GRUMultiHeadAtt(sent_hidden, word_out, nhead_doc=nhead_doc,
                                            bidirectional=bidirectional, dropout=dropout, aggregate_output=False)
 
         self.caps_classifier = CapsNet_Text(sent_out, nhead_doc, num_classes,
