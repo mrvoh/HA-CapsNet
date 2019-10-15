@@ -30,8 +30,9 @@ def doc_to_fasttext(in_path, out_path):
 
 	with open(out_path, 'w') as f:
 		for doc in docs:
-			labels =
-			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
+			labels = " ".join(["__label__"+tag for tag in doc.tags])
+			text = ' '.join([' '.join([word for word in sen]) for sen in doc.sentences])
+			f.write(labels + ' ' + text+'\n')
 
 
 def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5):

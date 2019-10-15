@@ -3,8 +3,36 @@ import torch.nn as nn
 from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 # ## Word attention model with bias
 from layers import *
-
+import fasttext
 transpose = (lambda b: b.t_().squeeze(0).contiguous())
+
+
+class FastTextLearner:
+
+    def __init__(self):
+        self.model = None
+
+    def train(self, train_path, dev_path=None, test_path=None, save_path = None, optimize_time=None, binary_classification=True,
+              lr=0.2, epoch=100,embed_size=300, K=5):
+        # optimize_time given in seconds
+
+        # train model
+        if not optimize_time:
+            self.model = fasttext.train_supervised(train_path, loss='hs' if binary_classification else 'ova', lr=lr, epoch=epoch, dim=embed_size)
+        else: # optimize params..
+            assert dev_path, "When FastText is optimized, a development set must also be given"
+            self.model = fasttext.train_supervised(train_path, autotune_validation_file=dev_path, autotune_duration=optimize_time, loss='hs' if binary_classification else 'ova')
+            fasttext.train_supervised()
+
+        if test_path:
+            N, p_k, r_k = self.model.test(test_path, K)
+            print("FastText model attained P@{0}: {1:0.3f}, R@{0}: {2:0.3f}, F1@{0}: {3:0.3f}".format(K, p_k, r_k, (2*p_k*r_k)/(r_k+p_k)))
+
+        # save if necessary
+        if save_path:
+            self.model.save_model(save_path) #TODO: quantization?
+
+
 
 class HAN(nn.Module):
 

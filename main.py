@@ -12,9 +12,10 @@ import gc
 import cProfile, pstats, io
 from pstats import SortKey
 
-from data_utils import process_dataset, get_data_loader, embeddings_from_docs
+from data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
 from text_class_learner import MultiLabelTextClassifier
 from eur_lex57k_to_doc import parse as eur_lex_parse
+from model import FastTextLearner
 
 
 if __name__ == '__main__':
@@ -84,6 +85,9 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
+	parser.add_argument("--binary_class",
+						action='store_false',
+						help="Whether model dataset as multi-class classification(cross-entropy based) or multi-label classification (multiple binary classification).")
 	parser.add_argument("--use_glove",
 						action='store_false',
 						help="Whether to utilize additional GloVe embeddings next to FastText.")
@@ -201,6 +205,19 @@ if __name__ == '__main__':
 						help="Minimum nr of occurrences before being assigned a word vector")
 
 	#	OTHER ARGS
+	parser.add_argument("--use_fasttext_baseline",
+						action='store_false',
+						help="Whether to use a FastText model for baseline purposes or not.")
+	parser.add_argument("--autotune_time_fasttext",
+						default=None,
+						type=int,
+						help="How many seconds to optimize fasttext hyperparams. Set to None to not perform autotuning")
+	parser.add_argument("--fasttext_save_path",
+						default=os.path.join('models', 'fasttext.model'),
+						type=str,
+						required=False,
+						help="The path where to dump logging.")
+
 	parser.add_argument("--log_path",
 						default='log.txt',
 						type=str,
@@ -223,6 +240,7 @@ if __name__ == '__main__':
 	label_to_idx_path = args.label_to_idx_path
 	word_vec_path = args.word_vec_path
 	label_map = None
+	ft_tmp_path = None
 	# pr = cProfile.Profile()
 	# pr.enable()
 
@@ -253,6 +271,34 @@ if __name__ == '__main__':
 	if args.create_wordvecs: # Create word vectors from train documents
 		print('Creating word vectors')
 		embeddings_from_docs(train_path, word_vec_path, word_vec_dim=args.embed_dim)
+
+	if args.use_fasttext_baseline: # Parse documents to train file for FastText
+
+		ft_learner = FastTextLearner()
+		ft_train_path = os.path.join('dataset', 'ft', 'train.txt')
+		ft_dev_path = os.path.join('dataset', 'ft', 'dev.txt')
+		ft_test_path = os.path.join('dataset', 'ft', 'test.txt')
+
+		# Parse train
+		doc_to_fasttext(train_path, ft_train_path)
+		# Parse dev
+		doc_to_fasttext(dev_path, ft_dev_path)
+		# Parse test
+		doc_to_fasttext(test_path, ft_test_path)
+
+		ft_learner.train(ft_train_path, dev_path=ft_dev_path, save_path=args.fasttext_save_path, test_path=ft_test_path,
+						 binary_classification=args.binary_class, optimize_time=args.autotune_time_fasttext, K=args.K)
+
+		#TODO: optionally use FT learner to scope down routing process of capsule based networks.
+
+
+
+
+
+
+	###########################################################################
+	# FastText Baseline and/or assisting model
+	###########################################################################
 
 	###########################################################################
 	# DATA LOADING
