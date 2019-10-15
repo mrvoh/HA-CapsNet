@@ -1,24 +1,125 @@
 import spacy
 import logging
-import glob
-import os
-import tqdm
+from pybacktrans import BackTranslator
 # from json_loader import JSONLoader
 LOGGER = logging.getLogger(__name__)
 import unicodedata
 # import sacremoses as sm
 import re
+from joblib import Parallel, delayed
+from textblob import TextBlob
+from textblob.translate import NotTranslated
 
-# def tokenize_doc_en(doc):
-#
-# 	tokens = []
-# 	for token in doc:
-# 		if '\n' in token.text:
-# 			tokens.append(token)
-# 		elif token.tag_ != '_SP' and token.text.strip(' '):
-# 			tokens.append(token)
-#
-# 	return tokens
+LANG_MAP= {
+    'af': 'afrikaans',
+    'sq': 'albanian',
+    'am': 'amharic',
+    'ar': 'arabic',
+    'hy': 'armenian',
+    'az': 'azerbaijani',
+    'eu': 'basque',
+    'be': 'belarusian',
+    'bn': 'bengali',
+    'bs': 'bosnian',
+    'bg': 'bulgarian',
+    'ca': 'catalan',
+    'ceb': 'cebuano',
+    'ny': 'chichewa',
+    'zh-cn': 'chinese (simplified)',
+    'zh-tw': 'chinese (traditional)',
+    'co': 'corsican',
+    'hr': 'croatian',
+    'cs': 'czech',
+    'da': 'danish',
+    'nl': 'dutch',
+    'en': 'english',
+    'eo': 'esperanto',
+    'et': 'estonian',
+    'tl': 'filipino',
+    'fi': 'finnish',
+    'fr': 'french',
+    'fy': 'frisian',
+    'gl': 'galician',
+    'ka': 'georgian',
+    'de': 'german',
+    'el': 'greek',
+    'gu': 'gujarati',
+    'ht': 'haitian creole',
+    'ha': 'hausa',
+    'haw': 'hawaiian',
+    'iw': 'hebrew',
+    'hi': 'hindi',
+    'hmn': 'hmong',
+    'hu': 'hungarian',
+    'is': 'icelandic',
+    'ig': 'igbo',
+    'id': 'indonesian',
+    'ga': 'irish',
+    'it': 'italian',
+    'ja': 'japanese',
+    'jw': 'javanese',
+    'kn': 'kannada',
+    'kk': 'kazakh',
+    'km': 'khmer',
+    'ko': 'korean',
+    'ku': 'kurdish (kurmanji)',
+    'ky': 'kyrgyz',
+    'lo': 'lao',
+    'la': 'latin',
+    'lv': 'latvian',
+    'lt': 'lithuanian',
+    'lb': 'luxembourgish',
+    'mk': 'macedonian',
+    'mg': 'malagasy',
+    'ms': 'malay',
+    'ml': 'malayalam',
+    'mt': 'maltese',
+    'mi': 'maori',
+    'mr': 'marathi',
+    'mn': 'mongolian',
+    'my': 'myanmar (burmese)',
+    'ne': 'nepali',
+    'no': 'norwegian',
+    'ps': 'pashto',
+    'fa': 'persian',
+    'pl': 'polish',
+    'pt': 'portuguese',
+    'pa': 'punjabi',
+    'ro': 'romanian',
+    'ru': 'russian',
+    'sm': 'samoan',
+    'gd': 'scots gaelic',
+    'sr': 'serbian',
+    'st': 'sesotho',
+    'sn': 'shona',
+    'sd': 'sindhi',
+    'si': 'sinhala',
+    'sk': 'slovak',
+    'sl': 'slovenian',
+    'so': 'somali',
+    'es': 'spanish',
+    'su': 'sundanese',
+    'sw': 'swahili',
+    'sv': 'swedish',
+    'tg': 'tajik',
+    'ta': 'tamil',
+    'te': 'telugu',
+    'th': 'thai',
+    'tr': 'turkish',
+    'uk': 'ukrainian',
+    'ur': 'urdu',
+    'uz': 'uzbek',
+    'vi': 'vietnamese',
+    'cy': 'welsh',
+    'xh': 'xhosa',
+    'yi': 'yiddish',
+    'yo': 'yoruba',
+    'zu': 'zulu',
+    'fil': 'Filipino',
+    'he': 'Hebrew'
+}
+
+LANGUAGES = [k for k in LANG_MAP.keys()]
 
 def lowercase_and_remove_accent(text):
 	"""
@@ -99,6 +200,20 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
+def translate(comment, language):
+	if hasattr(comment, "decode"):
+		comment = comment.decode("utf-8")
+
+	text = TextBlob(comment)
+	try:
+		text = text.translate(to=language)
+		text = text.translate(to="en")
+	except NotTranslated:
+		print('NOT TRANSLATED')
+		pass
+
+	return str(text)
+
 class Tagger(object):
 
 
@@ -123,14 +238,19 @@ class Document:
 	A document is a combination of text and the positions of the tags in that text.
 	"""
 	tagger = Tagger()
-	SHORT_SEN_TRESH = 3
+	translator = BackTranslator()
+	#
+	# 	# SHORT_SEN_TRESH = 3
 
-	def __init__(self, text, tags, sentences=None, filename=None, discard_short_sents = True, split_size_long_seqs=50):
+	def __init__(self, text, tags, sentences=None, filename=None, restructure_doc = True, split_size_long_seqs=50):
 		"""
 		:param text: document text as a string
 		:param tags: list of Tag objects
 		"""
-		self.discard_short_sents = discard_short_sents
+
+
+
+		self.restructure_doc = restructure_doc # If set to True all sentences longer than split_size_long_seqs will be split and afterwards greedily merged to get length as close as possible to split_size_long_seqs
 		self.split_size_long_seqs = split_size_long_seqs
 		# print(text)
 		# self.tokens = [[token.text for token in sent] for sent in Document.tagger.tokenize_text(text)]
@@ -140,15 +260,40 @@ class Document:
 			for sentence in sentences:
 				self.sentences.extend([[token.text for token in sent] for sent in Document.tagger.tokenize_text(sentence)])#[token.text for token in Document.tagger.tokenize_text(sentence)])
 
-		if self.discard_short_sents:
-			self.sentences = [sent for sent in self.sentences if len(sent) > self.SHORT_SEN_TRESH]
+		# if self.discard_short_sents:
+		# 	self.sentences = [sent for sent in self.sentences if len(sent) > self.SHORT_SEN_TRESH]
 
 		# Split seqs longer than split_size_long_seqs for computational efficiency
-		self._split_long_seqs()
+		if self.restructure_doc:
+			self._split_long_seqs()
 
 		self.tags = tags
 		self.text = text
 		self.filename = filename
+
+	def back_translate(self, num_copies):
+
+		sents = [" ".join(sen) for sen in self.sentences]
+		copies = [Document(
+			sentences=[translate(sen, LANGUAGES[i]) for sen in sents],
+			text='',
+			tags=self.tags)
+			for i in range(num_copies)
+		]
+
+		return copies
+
+	def back_translate1(self, num_copies): #TODO: look into https://github.com/PavelOstyakov/toxic/blob/master/tools/extend_dataset.py
+
+		sents = [" ".join(sen) for sen in self.sentences]
+		copies = [Document(
+			sentences = [Document.translator.backtranslate(sen, src='en', mid=LANGUAGES[i]).text for sen in sents],
+			text = '',
+			tags=self.tags)
+			for i in range(num_copies)
+		]
+
+		return copies
 
 	def get_text_sentences(self):
 		return [" ".join(sen) for sen in self.sentences]
@@ -163,6 +308,9 @@ class Document:
 			else:
 				sents.append(curr_sen)
 				curr_sen = []
+
+		if curr_sen != []:
+			sents.append(curr_sen)
 
 		self.sentences = sents
 
@@ -201,7 +349,6 @@ class Document:
 		final = [[tok for tok in sen if tok != ''] for sen in final]
 
 		# Merge small sentences back together
-
 		self.sentences = final
 		self._merge_short_seqs()
 
@@ -209,3 +356,10 @@ class Document:
 
 		res = "Doc name: {}\n Text: {}".format(self.filename, "\n".join([" ".join(sen) for sen in self.sentences]))
 		return res
+
+
+if __name__ == '__main__':
+
+	sen = ['AFFILIATED PUBLICATIONS INC & lt ; AFP > SETS PAYOUT Qtrly div eight cts vs eight cts prior Pay June 1 Record May 15']
+	d = Document('','',sentences=sen)
+	print(d.sentences)

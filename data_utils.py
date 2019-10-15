@@ -1,4 +1,4 @@
-from torchnlp.word_to_vector import FastText
+# from torchnlp.word_to_vector import FastText
 from urllib.request import urlopen
 from torchnlp.datasets import Dataset
 from torchnlp.samplers import BucketBatchSampler
@@ -18,12 +18,47 @@ from json_loader import JSONLoader
 import operator
 import pickle
 from collections import Counter
+import fasttext
+from flair.data import Sentence
+
+UNK = '<UNK>'
+PAD = '<PAD>'
+def doc_to_fasttext(in_path, out_path):
+	# Read in docs
+	with open(in_path, 'rb') as f:
+		docs = pickle.load(f)
+
+	with open(out_path, 'w') as f:
+		for doc in docs:
+			labels =
+			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
 
 
-# vectors = FastText(aligned=True, cache='.word_vectors_cache', language='es')
+def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5):
+	# Read in docs
+	with open(in_path, 'rb') as f:
+		docs = pickle.load(f)
 
-def get_embedding(vecs, word_to_idx):
-	embed_table = [vecs[key].numpy() for key in word_to_idx.keys()]
+	# Write docs to temporary *.txt file for fasttext to train on
+	with open('tmp.txt', 'w') as f:
+		for doc in docs:
+			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
+
+	# Train word embeddings
+	model = fasttext.train_unsupervised('tmp.txt', dim=word_vec_dim, ) #TODO: hyperparams
+
+	model.save_model(out_path)
+
+
+
+
+def get_embedding(vecs, word_to_idx, embed_size, glove = None):
+	embed_table = [vecs[key] if key in word_to_idx.keys() else np.random.rand(embed_size) for key in sorted(word_to_idx.keys())]
+	if glove:
+		glove_emb = [Sentence(key) for key in sorted(word_to_idx.keys())]
+		[glove.embed(k) for k in glove_emb]
+		glove_emb = [tok.embedding for tok in glove_emb]
+		embed_table = [np.concatenate([x1,x2]) for x1, x2 in zip(embed_table, glove_emb)]
 	embed_table = np.array(embed_table, dtype=float)
 	return embed_table
 
@@ -65,9 +100,7 @@ def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 	with open(os.path.join(dataset_dir, dataset_name + '.pkl'), 'wb') as f:
 		pickle.dump(docs, f)
 
-# Parse dataset from [Documents]
-UNK = '<UNK>'
-PAD = '<PAD>'
+
 
 def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
 	try:
@@ -136,15 +169,12 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 # Collate function
 def collate_fn_rnn(batch):
 
-	test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
 	doc_lens_batch = [len(doc['sents']) for doc in batch]
 
 
 	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
 	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
-	# sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
-	# word_len_batch, _ = stack_and_pad_tensors([seq['word_len'] for seq in batch])
 
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 	sents_batch = sents_batch.to(device)
@@ -160,7 +190,7 @@ def collate_fn_rnn(batch):
 
 def collate_fn_transformer(batch):
 
-	test = [sent for doc in batch for sent in doc['sents']]
+	# test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
 	doc_lens_batch = [len(doc['sents']) for doc in batch]
 
