@@ -59,11 +59,11 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.4,
+						default=0.3,
 						type=float,
 						help="The initial learning rate for RAdam.")
 	parser.add_argument("--num_train_epochs",
-						default=15,
+						default=30,
 						type=int,
 						help="Total number of training epochs to perform.")
 	parser.add_argument("--eval_every",
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Cut-off value for evaluation metrics")
 	parser.add_argument("--weight_decay",
-						default=5e-4,
+						default=1e-3,
 						type=float,
 						help="L2 regularization term.")
 
@@ -89,7 +89,7 @@ if __name__ == '__main__':
 						action='store_false',
 						help="Whether model dataset as multi-class classification(cross-entropy based) or multi-label classification (multiple binary classification).")
 	parser.add_argument("--use_glove",
-						action='store_false',
+						action='store_true',
 						help="Whether to utilize additional GloVe embeddings next to FastText.")
 	parser.add_argument("--word_encoder",
 					   default='gru',
@@ -106,11 +106,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=256,
+						default=100,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=256,
+						default=100,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 
@@ -119,12 +119,16 @@ if __name__ == '__main__':
 						default=16,
 						type=int,
 						help="Nr of dimensions of a capsule")
+	parser.add_argument("--num_head_doc",
+						default=5,
+						type=int,
+						help="Nr of dimensions of a capsule")
 	parser.add_argument("--num_caps",
-						default=48,
+						default=40,
 						type=int,
 						help="Number of capsules in Primary Capsule Layer")
 	parser.add_argument("--num_compressed_caps",
-						default=500,
+						default=150,
 						type=int,
 						help="Number of compressed capsules")
 
@@ -206,7 +210,7 @@ if __name__ == '__main__':
 
 	#	OTHER ARGS
 	parser.add_argument("--use_fasttext_baseline",
-						action='store_false',
+						action='store_true',
 						help="Whether to use a FastText model for baseline purposes or not.")
 	parser.add_argument("--autotune_time_fasttext",
 						default=None,
@@ -362,7 +366,8 @@ if __name__ == '__main__':
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay, lr=args.learning_rate)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.word_vec_path, args.use_glove,
-									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder, pos_weight=pos_weight)
+									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder, pos_weight=pos_weight,
+									  dim_caps=args.dim_caps, num_caps=args.num_caps, num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,
