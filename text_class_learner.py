@@ -314,9 +314,11 @@ class MultiLabelTextClassifier:
 			optimizer.zero_grad()
 
 			(sents, sents_len, doc_lens, target) = batch
-			preds, word_attention_scores, sent_attention_scores = self.model(sents, sents_len, doc_lens)
+			preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens)
 
 			loss = criterion(preds, target)
+			if train_step > (eval_every * 1): #TODO: adapt this after test
+				loss += rec_loss
 			tr_loss += loss.item()
 
 			if APEX_AVAILABLE:
@@ -397,7 +399,7 @@ class MultiLabelTextClassifier:
 
 				(sents, sents_len, doc_lens, target) = batch
 
-				preds, _, _ = self.model(sents, sents_len, doc_lens)
+				preds = self.model(sents, sents_len, doc_lens)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets

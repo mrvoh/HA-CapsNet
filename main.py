@@ -106,11 +106,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=100,
+						default=10,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=100,
+						default=10,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 

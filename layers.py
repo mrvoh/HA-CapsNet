@@ -448,9 +448,9 @@ class CapsNet_Text(nn.Module):
 
 
 		# DOC RECONSTRUCTOR
-		self.recon_error_lambda = 0.0005 # factor to scale down reconstruction loss with
+		self.recon_error_lambda = 0.00005 # factor to scale down reconstruction loss with
 		reconstruction_size = input_size
-		self.reconstruct0 = nn.Linear(num_caps * dim_caps, int((reconstruction_size * 2) / 3))
+		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
 
@@ -513,14 +513,14 @@ class CapsNet_Text(nn.Module):
 		masked = masked.view(input.size(0), -1)
 		output = self.relu(self.reconstruct0(masked))
 		output = self.relu(self.reconstruct1(output))
-		output = self.sigmoid(self.reconstruct2(output))
+		output = self.reconstruct2(output)
 		# output = output.view(-1, self.image_channels, self.image_height, self.image_width)
 
 		# The reconstruction loss is the sum squared difference between the input image and reconstructed image.
 		# Multiplied by a small number so it doesn't dominate the margin (class) loss.
 		error = (output - doc_enc).view(output.size(0), -1)
 		error = error ** 2
-		error = torch.sum(error, dim=1) * 0.0005
+		error = torch.sum(error, dim=1) * self.recon_error_lambda
 
 		# Average over batch
 		if size_average:

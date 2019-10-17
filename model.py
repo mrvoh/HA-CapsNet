@@ -168,7 +168,10 @@ class HCapsNet(nn.Module):
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
-        return activations, word_attn_weight, sent_attn_weight
+        # TEMP: reconstuction
+        rec_los = self.caps_classifier.reconstruction_loss(doc_encoding.squeeze(1), poses)
+
+        return activations, word_attn_weight, sent_attn_weight, rec_los
 
 
 class HCapsNetMultiHeadAtt(nn.Module):
@@ -222,5 +225,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
 
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
+
+
 
         return activations, word_attn_weight, sent_attn_weight
