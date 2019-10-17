@@ -15,6 +15,7 @@ from pstats import SortKey
 from data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
 from text_class_learner import MultiLabelTextClassifier
 from eur_lex57k_to_doc import parse as eur_lex_parse
+from reuters_to_doc import parse as reuters_parse
 from model import FastTextLearner
 
 
@@ -134,10 +135,10 @@ if __name__ == '__main__':
 
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_true',
+						action='store_false',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--raw_data_dir",
-						default='dataset',
+						default='dataset\\eur-lex57k',
 						type=str,
 						required=False,
 						help="Dir from where to parse the data.")
@@ -146,10 +147,14 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--dataset_name",
-						default='reuters',
+						default='eur-lex57k',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
+	parser.add_argument("--percentage_train",
+						default=0.9,
+						type=float,
+						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",
 						default='dataset',
 						type=str,
@@ -269,13 +274,21 @@ if __name__ == '__main__':
 	###########################################################################
 
 	if args.preprocess_all:
-		label_to_idx_path, train_path, dev_path, test_path = \
-			eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
+		if args.dataset_name.lower() == 'reuters':
+			reuters_parse(args.write_data_dir, args.percentage_train)
+		elif args.dataset_name.lower() == 'eur-lex57k':
+			label_to_idx_path, train_path, dev_path, test_path = \
+				eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
+		else:
+			raise AssertionError('Currently only Reuters and EUR-Lex57k are supported datasets for preprocessing.')
 
 	if args.create_wordvecs: # Create word vectors from train documents
 		print('Creating word vectors')
 		embeddings_from_docs(train_path, word_vec_path, word_vec_dim=args.embed_dim)
 
+	###########################################################################
+	# FastText Baseline and/or assisting model
+	###########################################################################
 	if args.use_fasttext_baseline: # Parse documents to train file for FastText
 
 		ft_learner = FastTextLearner()
@@ -294,15 +307,6 @@ if __name__ == '__main__':
 						 binary_classification=args.binary_class, optimize_time=args.autotune_time_fasttext, K=args.K)
 
 		#TODO: optionally use FT learner to scope down routing process of capsule based networks.
-
-
-
-
-
-
-	###########################################################################
-	# FastText Baseline and/or assisting model
-	###########################################################################
 
 	###########################################################################
 	# DATA LOADING

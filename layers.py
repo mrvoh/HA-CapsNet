@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import copy
-from transformer import Encoder as TransformerEncoder
+# from transformer import Encoder as TransformerEncoder
 from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
 

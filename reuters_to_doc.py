@@ -41,5 +41,5 @@ def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seq
 
 
 if __name__ == '__main__':
-
-	parse('dataset\\reuters', 0.9)
+	None
+	# parse('dataset\\reuters', 0.9)
