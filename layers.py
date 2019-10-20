@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import copy
-from transformer import Encoder as TransformerEncoder
+# from transformer import Encoder as TransformerEncoder
 from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
 
@@ -449,6 +449,7 @@ class CapsNet_Text(nn.Module):
 
 		# DOC RECONSTRUCTOR
 		self.recon_error_lambda = 0.00005 # factor to scale down reconstruction loss with
+		self.rescale = nn.Parameter(torch.Tensor([7]))
 		reconstruction_size = input_size
 		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
@@ -511,6 +512,7 @@ class CapsNet_Text(nn.Module):
 
 		# Reconstruct doc encoding.
 		masked = masked.view(input.size(0), -1)
+		# masked = masked * torch.pow(10,self.rescale) #test
 		output = self.relu(self.reconstruct0(masked))
 		output = self.relu(self.reconstruct1(output))
 		output = self.reconstruct2(output)
@@ -518,7 +520,8 @@ class CapsNet_Text(nn.Module):
 
 		# The reconstruction loss is the sum squared difference between the input image and reconstructed image.
 		# Multiplied by a small number so it doesn't dominate the margin (class) loss.
-		error = (output - doc_enc).view(output.size(0), -1)
+		error = (output - doc_enc)
+		# error = error.view(output.size(0), -1)
 		error = error ** 2
 		error = torch.sum(error, dim=1) * self.recon_error_lambda
 

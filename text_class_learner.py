@@ -317,8 +317,8 @@ class MultiLabelTextClassifier:
 			preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens)
 
 			loss = criterion(preds, target)
-			if train_step > (eval_every * 1): #TODO: adapt this after test
-				loss += rec_loss
+			# if train_step > (eval_every * 0): #TODO: adapt this after test
+			loss += rec_loss
 			tr_loss += loss.item()
 
 			if APEX_AVAILABLE:
@@ -327,8 +327,9 @@ class MultiLabelTextClassifier:
 			else:
 				loss.backward()
 
+			# torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
 			optimizer.step()
-			prog.update(batch_idx + 1, values=[("train loss", loss.item())])
+			prog.update(batch_idx + 1, values=[("train loss", loss.item()), ("recon loss", rec_loss)])
 			torch.cuda.empty_cache()
 
 			if train_step % eval_every == 0:

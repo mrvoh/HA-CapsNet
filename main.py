@@ -59,7 +59,7 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.3,
+						default=0.0,
 						type=float,
 						help="The initial learning rate for RAdam.")
 	parser.add_argument("--num_train_epochs",
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Cut-off value for evaluation metrics")
 	parser.add_argument("--weight_decay",
-						default=1e-3,
+						default=0, #1e-3,
 						type=float,
 						help="L2 regularization term.")
 
@@ -106,11 +106,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=10,
+						default=100,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=10,
+						default=100,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 
@@ -124,11 +124,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of a capsule")
 	parser.add_argument("--num_caps",
-						default=40,
+						default=32,
 						type=int,
 						help="Number of capsules in Primary Capsule Layer")
 	parser.add_argument("--num_compressed_caps",
-						default=150,
+						default=200,
 						type=int,
 						help="Number of compressed capsules")
 
