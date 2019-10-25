@@ -59,7 +59,7 @@ if __name__ == '__main__':
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.0,
+						default=0.25,
 						type=float,
 						help="The initial learning rate for RAdam.")
 	parser.add_argument("--num_train_epochs",
@@ -89,7 +89,7 @@ if __name__ == '__main__':
 						action='store_false',
 						help="Whether model dataset as multi-class classification(cross-entropy based) or multi-label classification (multiple binary classification).")
 	parser.add_argument("--use_glove",
-						action='store_true',
+						action='store_false',
 						help="Whether to utilize additional GloVe embeddings next to FastText.")
 	parser.add_argument("--word_encoder",
 					   default='gru',
@@ -106,11 +106,11 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=100,
+						default=300,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=100,
+						default=300,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of capsules in Primary Capsule Layer")
 	parser.add_argument("--num_compressed_caps",
-						default=200,
+						default=150,
 						type=int,
 						help="Number of compressed capsules")
 

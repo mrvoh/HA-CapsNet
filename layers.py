@@ -448,12 +448,13 @@ class CapsNet_Text(nn.Module):
 
 
 		# DOC RECONSTRUCTOR
-		self.recon_error_lambda = 0.00005 # factor to scale down reconstruction loss with
+		self.recon_error_lambda = 0.0005 # factor to scale down reconstruction loss with
 		self.rescale = nn.Parameter(torch.Tensor([7]))
 		reconstruction_size = input_size
 		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
+		self.bn = nn.BatchNorm2d(num_classes)
 
 		self.relu = nn.ReLU(inplace=True)
 		self.sigmoid = nn.Sigmoid()
@@ -488,6 +489,7 @@ class CapsNet_Text(nn.Module):
 
 	def reconstruction_loss(self, doc_enc, input, size_average=True):
 		# Get the lengths of capsule outputs.
+		input = self.bn(input)
 		v_mag = torch.sqrt((input ** 2).sum(dim=2))
 
 		# Get index of longest capsule output.
@@ -517,7 +519,9 @@ class CapsNet_Text(nn.Module):
 		output = self.relu(self.reconstruct1(output))
 		output = self.reconstruct2(output)
 		# output = output.view(-1, self.image_channels, self.image_height, self.image_width)
-
+		#test: normalize doc encoding and reconstruction
+		# output = output.div(output.norm(p=2, dim=1, keepdim=True))
+		# doc_enc = doc_enc.div(doc_enc.norm(p=2, dim=1, keepdim=True))
 		# The reconstruction loss is the sum squared difference between the input image and reconstructed image.
 		# Multiplied by a small number so it doesn't dominate the margin (class) loss.
 		error = (output - doc_enc)
