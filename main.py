@@ -8,6 +8,7 @@ import os
 import pickle
 import json
 import argparse
+import configargparse
 import gc
 import cProfile, pstats, io
 from pstats import SortKey
@@ -31,9 +32,13 @@ if __name__ == '__main__':
 	# ARGUMENT PARSING
 	#########################################################################################
 
-	parser = argparse.ArgumentParser()
-
+	# parser = argparse.ArgumentParser()
+	parser = configargparse.ArgParser(default_config_files=['.\\parameters.ini'])
 	#  MAIN ARGUMENTS
+	parser.add_argument('-c', '--my-config',
+						required=False,
+						is_config_file=True,
+						help='config file path')
 	parser.add_argument("--do_train",
 						action='store_false',
 						help="Whether to run training.")
@@ -48,43 +53,42 @@ if __name__ == '__main__':
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
-						default=16,
+						required=True,
 						type=int,
 						help="Total batch size for training.")
 	parser.add_argument("--eval_batch_size",
-						default=32,
+						required=True,
 						type=int,
 						help="Total batch size for eval.")
 	parser.add_argument("--learning_rate",
-						default=1e-3,
+						required=True,
 						type=float,
 						help="The initial learning rate for Adam.")
 	parser.add_argument("--dropout",
-						default=0.3,
+						required=True,
 						type=float,
 						help="The initial learning rate for RAdam.")
 	parser.add_argument("--num_train_epochs",
-						default=30,
+						required=True,
 						type=int,
 						help="Total number of training epochs to perform.")
 	parser.add_argument("--eval_every",
-						default=500,
+						required=True,
 						type=int,
 						help="Nr of training updates before evaluating model")
 	parser.add_argument("--K",
-						default=1,
+						required=True,
 						type=int,
 						help="Cut-off value for evaluation metrics")
 	parser.add_argument("--weight_decay",
-						default=1e-3,
+						required=True,
 						type=float,
 						help="L2 regularization term.")
 
 	#  MODEL ARGS
 	parser.add_argument("--model_name",
-						default='HCapsNet',#'HCapsNetMultiHeadAtt',
 						type=str,
-						required=False,
+						required=True,
 						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
 	parser.add_argument("--binary_class",
 						action='store_false',
@@ -93,31 +97,25 @@ if __name__ == '__main__':
 						action='store_true',
 						help="Whether to utilize additional GloVe embeddings next to FastText.")
 	parser.add_argument("--word_encoder",
-					   default='gru',
 					   type=str,
-					   required=False,
+					   required=True,
 					   help="The path from where the class-names are to be retrieved.")
 	parser.add_argument("--sent_encoder",
-						default='gru',
 						type=str,
-						required=False,
+						required=True,
 						help="The path from where the class-names are to be retrieved.")
 	parser.add_argument("--embed_dim",
-						default=300,
 						type=int,
 						help="Nr of dimensions of used word vectors")
 	parser.add_argument("--word_hidden",
-						default=100,
 						type=int,
 						help="Nr of hidden units word encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 	parser.add_argument("--sent_hidden",
-						default=100,
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
 
 		# caps net options
 	parser.add_argument("--dim_caps",
-						default=16,
 						type=int,
 						help="Nr of dimensions of a capsule")
 	parser.add_argument("--num_head_doc",
@@ -125,17 +123,15 @@ if __name__ == '__main__':
 						type=int,
 						help="Nr of dimensions of a capsule")
 	parser.add_argument("--num_caps",
-						default=40,
 						type=int,
 						help="Number of capsules in Primary Capsule Layer")
 	parser.add_argument("--num_compressed_caps",
-						default=150,
 						type=int,
 						help="Number of compressed capsules")
 
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_false',
+						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--raw_data_dir",
 						default='dataset\\eur-lex57k',
@@ -167,17 +163,14 @@ if __name__ == '__main__':
 
 
 	parser.add_argument("--train_path",
-						default=os.path.join('dataset', 'reuters', 'train.pkl'),
 						type=str,
-						required=False,
+						required=True,
 						help="The path from where the train dataset is to be retrieved.")
 	parser.add_argument("--dev_path",
-						default=os.path.join('dataset', 'reuters', 'dev.pkl'),
+						required=True,
 						type=str,
-						required=False,
 						help="The path from where the dev dataset is to be retrieved.")
 	parser.add_argument("--test_path",
-						default=os.path.join('dataset', 'reuters', 'test.pkl'),
 						type=str,
 						required=False,
 						help="The path from where the dev dataset is to be retrieved.")
@@ -185,31 +178,26 @@ if __name__ == '__main__':
 						action='store_true',
 						help="Whether to create custom word vectors using FastText.")
 	parser.add_argument("--word_vec_path",
-						default= 'word vectors\\cc.en.300.bin', #"word vectors\\custom-reuters.vec",
-						# default = "D:\\UvA\\Statistical Methods For Natural Language Semantics\\Assignments\\2\\LASERWordEmbedder\\src\\.word_vectors_cache\\wiki.multi.en.vec.pt",
 						type=str,
-						required=False,
+						required=True,
 						help="Folder where vector caches are stored.")
 	parser.add_argument("--preload_word_to_idx",
 						action='store_true',
 						help="Whether to use an existing word to idx mapping.")
 	parser.add_argument("--word_to_idx_path",
-						default=os.path.join('dataset', 'word_to_idx_500.pkl'),
 						type=str,
-						required=False,
+						required=True,
 						help="The path from where the word mapping is to be retrieved.")
 	parser.add_argument("--label_to_idx_path",
 						default=os.path.join('dataset', 'reuters', 'label_to_idx.json'),
 						type=str,
-						required=False,
+						required=True,
 						help="The path from where the label mapping is to be retrieved.")
 	parser.add_argument("--label_map_path",
-						default=None, #os.path.join('dataset', 'label_map.json'),
 						type=str,
 						required=False,
 						help="The path from where the mapping from label id to label description is loaded.")
 	parser.add_argument("--min_freq_word",
-						default=5,
 						type=int,
 						help="Minimum nr of occurrences before being assigned a word vector")
 
