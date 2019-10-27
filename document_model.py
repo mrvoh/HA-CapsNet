@@ -10,6 +10,9 @@ from joblib import Parallel, delayed
 from textblob import TextBlob
 from textblob.translate import NotTranslated
 
+from fastai.text.transform import Tokenizer as ULMFiTTokenizer
+from fastai.text.transform import SpacyTokenizer
+
 # language mapping for backtranslation
 LANG_MAP= {
     'af': 'afrikaans',
@@ -223,18 +226,24 @@ class TextPreprocessor(object):
 	""""
 	Normalizes and tokenizes text
 	"""
-	def __init__(self, preprocess = True):
-		self._spacy_tagger = spacy.load('en', disable=['parser', 'ner'])
+	def __init__(self, ulmfit_preprocessing = True, lang='en'):
+		self._spacy_tagger = spacy.load(lang, disable=['parser', 'ner'])
 		self._spacy_tagger.add_pipe(self._spacy_tagger.create_pipe('sentencizer'))
 
-		self.preprocess = preprocess
+		self.ulmfit_preprocessing = ulmfit_preprocessing
+		if ulmfit_preprocessing:
+			self.ulmfit_tokenizer = ULMFiTTokenizer()
+			self.s = SpacyTokenizer(lang) # used by ulmfit tokenizer
 
 	def tokenize_text(self, text: str):
 
-		if self.preprocess:
+		if not self.ulmfit_preprocessing: # standard preprocessing
 			text = lowercase_and_remove_accent(text)
 			text = remove_non_printing_char(text)
 			text = replace_unicode_punct(text)
+		else: # ULMFiT-specific preprocessing
+			text = ' '.join(self.ulmfit_tokenizer.process_text(text, self.s))
+
 
 		return [[t for t in sent] for sent in self._spacy_tagger(text).sents]
 
@@ -243,9 +252,9 @@ class Document:
 	"""
 	A document is a combination of text and the positions of the tags in that text.
 	"""
-	text_preprocessor = TextPreprocessor()
+	# text_preprocessor = TextPreprocessor()
 
-	def __init__(self,tags, text=None,  sentences=None, filename=None, restructure_doc = True, split_size_long_seqs=50, discard_short_sents=False, short_seqs_thresh=3):
+	def __init__(self,tags, text_preprocessor, text=None,  sentences=None, filename=None, restructure_doc = True, split_size_long_seqs=50, discard_short_sents=False, short_seqs_thresh=3):
 		"""
 		:param text: document text as a string
 		:param tags: list of Tag objects
@@ -261,9 +270,9 @@ class Document:
 		if sentences: # Data already partially preprocessed
 			self.sentences = []
 			for sentence in sentences:
-				self.sentences.extend([[token.text for token in sent] for sent in Document.text_preprocessor.tokenize_text(sentence)])
+				self.sentences.extend([[token.text for token in sent] for sent in text_preprocessor.tokenize_text(sentence)])
 		else: # Full preprocessing still needs to be done
-			self.sentences = Document.text_preprocessor.tokenize_text(text)
+			self.sentences = text_preprocessor.tokenize_text(text)
 
 		if self.discard_short_sents:
 			self.sentences = [sent for sent in self.sentences if len(sent) > self.short_seqs_thresh]

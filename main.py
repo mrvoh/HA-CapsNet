@@ -10,8 +10,8 @@ import json
 import argparse
 import configargparse
 import gc
-import cProfile, pstats, io
-from pstats import SortKey
+# import cProfile, pstats, io
+# from pstats import SortKey
 
 from data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
 from text_class_learner import MultiLabelTextClassifier
@@ -49,7 +49,12 @@ if __name__ == '__main__':
 						default=None,
 						type=str,
 						required=False,
-						help="The path from where the class-names are to be retrieved.")
+						help="The path from where the pretrained model is to be retrieved.")
+	parser.add_argument("--ulmfit_pretrained_path",
+						default=None,
+						type=str,
+						required=False,
+						help="The path from where the pretrained model is to be retrieved.")
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
@@ -131,8 +136,9 @@ if __name__ == '__main__':
 
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_true',
+						action='store_false',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
+
 	parser.add_argument("--raw_data_dir",
 						default='dataset\\eur-lex57k',
 						type=str,
@@ -143,7 +149,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--dataset_name",
-						default='eur-lex57k',
+						default='reuters',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
@@ -246,6 +252,12 @@ if __name__ == '__main__':
 	###########################################################################
 
 	assert (args.do_train or args.do_eval), "Either do_train and/or do_eval must be chosen"
+	assert args.word_encoder.lower() in ['gru', 'transformer', 'ulmfit'], "The word encoder (--word_encoder) can only be set to GRU, Transformer and ULMFiT."
+	assert args.sent_encoder.lower() in ['gru', 'transformer'], "The sentence encoder (--sent_encoder) can only be set to GRU or Transformer."
+
+	if args.word_encoder.lower() == 'ulmfit':
+		assert args.ulmfit_pretrained_path is not None, "if ULMFiT is chosen as word encoder its corresponding pretrained path (--ulmfit_pretrained_path) must be given."
+		assert args.preload_word_to_idx, "If ULMFiT is chosen as word encoder --preload_word_to_idx must be set to True."
 
 	if (args.preload_word_to_idx or args.pretrained_path):
 		assert args.word_to_idx_path, "When either --preload_word_to_idx or --pretrained_path is given, its respectice --word_to_idx_path must also be given"
@@ -263,7 +275,7 @@ if __name__ == '__main__':
 
 	if args.preprocess_all:
 		if args.dataset_name.lower() == 'reuters':
-			reuters_parse(args.write_data_dir, args.percentage_train)
+			reuters_parse(args.write_data_dir, args.percentage_train, use_ulmfit=args.word_encoder.lower()=='ulmfit')
 		elif args.dataset_name.lower() == 'eur-lex57k':
 			label_to_idx_path, train_path, dev_path, test_path = \
 				eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
