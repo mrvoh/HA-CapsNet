@@ -5,8 +5,10 @@ from torch.autograd import Variable
 import numpy as np
 import copy
 # from transformer import Encoder as TransformerEncoder
-# from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
+from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
+from fastai.text import *
+# from fastai
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
@@ -69,9 +71,29 @@ class TransformerEncoder(nn.Module):
 # HIERARCHICAL DOC ENCODING LAYERS
 ###################################################################################################
 
+class ULMFiTEncoder(nn.Module):
+	def __init__(self, pretrained_path, num_tokens):
+		super(ULMFiTEncoder, self).__init__()
+		# state_dict = torch.loa
+		config = {'emb_sz': 400, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
+		config['n_hid'] = 1150
+		#TODO: save config in state_dict when finetuning
+		lm = get_language_model(AWD_LSTM, num_tokens, config=config)
+		# lm.load_pretrained(pretrained_path)
+		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
+		self.bn = nn.BatchNorm1d(config['n_hid'])
+		self.ulmfit = lm
+
+	def forward(self, x):
+		_, _, x = self.ulmfit(x)
+
+		x_max = x[0]#[:,-1,:] # final hidden state
+		# x_max = self.bn(x_max)
+		return x_max
+
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 num_layers = 1, nhead = 4, use_bert = False):
+				 num_layers = 1, nhead = 4, use_bert = False, ulmfit_pretrained_path = None):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -101,6 +123,9 @@ class AttentionWordEncoder(nn.Module):
 			self.word_encoder = TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
 
 			word_out = word_hidden
+		elif encoder_type.lower() == 'ulmfit':
+			self.word_encoder = ULMFiTEncoder(ulmfit_pretrained_path, num_tokens)
+			word_out = 1150
 
 		self.weight_W_word = nn.Linear(word_out, word_out)
 		self.weight_proj_word = nn.Parameter(torch.Tensor(word_out, 1))
@@ -115,27 +140,32 @@ class AttentionWordEncoder(nn.Module):
 
 	def forward(self, x):
 
-		# embeddings
-		x_emb = self.lookup(x)
-		N,B,d_c = x_emb.shape
+		if self.encoder_type.lower() == 'ulmfit': # ULMFit flow
+			x1 = self.word_encoder(x)
+		else: # Regular word embeddings flow
+			# embeddings
+			x_emb = self.lookup(x)
+			N,B,d_c = x_emb.shape
 
-		if self.use_bert: # Get extra embeddings
+			if self.use_bert: # Get extra embeddings
 
-			# self.bert_embedding.embed(text)
-			[self.bert_embedding.embed(t) for t in chunker(text, 10**6)]
-			# t = [tok.embedding for tok in text[0]]
-			extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
-			extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
-			extra_embeddings = extra_embeddings.to(x_emb.device)
+				# self.bert_embedding.embed(text)
+				[self.bert_embedding.embed(t) for t in chunker(text, 10**6)]
+				# t = [tok.embedding for tok in text[0]]
+				extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
+				extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
+				extra_embeddings = extra_embeddings.to(x_emb.device)
 
-			x_emb = torch.cat([x_emb, extra_embeddings.permute(1,0,2)],dim=2)
+				x_emb = torch.cat([x_emb, extra_embeddings.permute(1,0,2)],dim=2)
 
 
-		if self.encoder_type.lower() == 'gru':
-			x1, _ = self.word_encoder(self.drop1(x_emb))
-		elif self.encoder_type.lower() == 'transformer':
-			x1 = self.word_encoder(self.drop1(x_emb))
-			# x1 = x1.permute(1,0,2)
+			if self.encoder_type.lower() == 'gru':
+				x1, _ = self.word_encoder(self.drop1(x_emb))
+			elif self.encoder_type.lower() == 'transformer':
+				x1 = self.word_encoder(self.drop1(x_emb))
+				# x1 = x1.permute(1,0,2)
+			elif self.encoder_type.lower() == 'ulmfit':
+				x1 = self.word_encoder(x)
 		# compute attention
 		Hw = torch.tanh(self.weight_W_word(x1))
 		Hw = Hw + x1  # residual connection

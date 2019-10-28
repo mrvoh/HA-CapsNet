@@ -54,7 +54,7 @@ if __name__ == '__main__':
 						default=None,
 						type=str,
 						required=False,
-						help="The path from where the pretrained model is to be retrieved.")
+						help="The path from where the pretrained language model is to be retrieved.")
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
@@ -136,7 +136,7 @@ if __name__ == '__main__':
 
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_false',
+						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 
 	parser.add_argument("--raw_data_dir",
@@ -323,6 +323,8 @@ if __name__ == '__main__':
 		with open(args.word_to_idx_path, 'r') as f:
 			# idx_to_label = json.load(f)
 			word_to_idx = json.load(f)
+			if args.word_encoder.lower() == 'ulmfit':
+				word_to_idx = {v:i for i,v in enumerate(word_to_idx)}
 	else:
 		word_to_idx = None
 
@@ -335,9 +337,12 @@ if __name__ == '__main__':
 			dev_docs = pickle.load(f)
 
 
+		unk = 'xxunk' if args.word_encoder == 'ulmfit' else '<UNK>'
+		pad = 'xxpad' if args.word_encoder == 'ulmfit' else '<PAD>'
 
 		# get dataloader
-		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word)
+		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,
+																		unk=unk, pad=pad)
 		pos_weight = [v/len(train_dataset) for k,v in tag_counter_train.items()]
 		dataloader_train = get_data_loader(train_dataset, args.train_batch_size, True, use_rnn)
 
@@ -349,7 +354,8 @@ if __name__ == '__main__':
 		del train_dataset
 		del train_docs
 
-		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word)
+		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,
+																	unk=unk, pad=pad)
 		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, False, use_rnn)
 		# Free some memory
 		del dev_dataset
@@ -371,7 +377,8 @@ if __name__ == '__main__':
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.word_vec_path, args.use_glove,
 									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder, pos_weight=pos_weight,
-									  dim_caps=args.dim_caps, num_caps=args.num_caps, num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc)
+									  dim_caps=args.dim_caps, num_caps=args.num_caps, num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
+									  ulmfit_pretrained_path=args.ulmfit_pretrained_path)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

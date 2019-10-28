@@ -37,7 +37,7 @@ class FastTextLearner:
 class HAN(nn.Module):
 
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, ulmfit_pretrained_path = None, **kwargs):
         super(HAN, self).__init__()
 
         # self.batch_size = batch_size
@@ -48,12 +48,17 @@ class HAN(nn.Module):
         self.word_contextualizer = word_encoder
         self.sent_contextualizer = sent_encoder
 
-        word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
+        if word_encoder.lower() == 'ulmfit':
+            word_out = 1150 # static ULMFiT value
+        else:
+            word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
         sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() =='gru')  else sent_hidden
 
+        # self.sent_encoder = ULMFiTEncoder(kwargs['ulmfit_pretrained_path'], num_tokens)
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
-                                                 num_layers=num_layers_word, nhead=nhead_word
+                                                 num_layers=num_layers_word, nhead=nhead_word,
+                                                 ulmfit_pretrained_path=ulmfit_pretrained_path
                                                  )
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
@@ -70,9 +75,6 @@ class HAN(nn.Module):
     def forward(self, sents, sents_len, doc_lens):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
-
-        # if self.word_contextualizer != self.sent_contextualizer:
-        #     sen_encodings = sen_encodings.permute(1, 0, 2)
 
         sen_encodings = sen_encodings.split(split_size=doc_lens)
         # stack and pad
