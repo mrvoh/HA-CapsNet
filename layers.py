@@ -78,18 +78,26 @@ class ULMFiTEncoder(nn.Module):
 		config = {'emb_sz': 400, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
 		config['n_hid'] = 1150
 		#TODO: save config in state_dict when finetuning
-		lm = get_language_model(AWD_LSTM, num_tokens, config=config)
+		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=1.)
 		# lm.load_pretrained(pretrained_path)
 		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
-		self.bn = nn.BatchNorm1d(config['n_hid'])
+		self.bn = nn.BatchNorm1d(config['emb_sz'])
 		self.ulmfit = lm
+		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
+
+		self.ulmfit = next(lm.modules())[0]
 
 	def forward(self, x):
-		_, _, x = self.ulmfit(x)
+		# manually reset the hidden states
+		self.ulmfit.reset()
 
-		x_max = x[0]#[:,-1,:] # final hidden state
+		h, c = self.ulmfit(x)
+
+		x = h[-1]#[:,-1,:] # final hidden state
+		x = self.bn(x.permute(0,2,1)).permute(0,2,1)
+
 		# x_max = self.bn(x_max)
-		return x_max
+		return x
 
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
@@ -125,7 +133,7 @@ class AttentionWordEncoder(nn.Module):
 			word_out = word_hidden
 		elif encoder_type.lower() == 'ulmfit':
 			self.word_encoder = ULMFiTEncoder(ulmfit_pretrained_path, num_tokens)
-			word_out = 1150
+			word_out = 400
 
 		self.weight_W_word = nn.Linear(word_out, word_out)
 		self.weight_proj_word = nn.Parameter(torch.Tensor(word_out, 1))

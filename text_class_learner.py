@@ -183,15 +183,18 @@ class MultiLabelTextClassifier:
 			self.model = HAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 word_encoder = word_encoder, sent_encoder = sent_encoder, ulmfit_pretrained_path=ulmfit_pretrained_path) #TODO: also adapt for other models
 		elif self.model_name.lower() == 'hgrulwan':
-			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout)
+			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout, word_encoder=word_encoder,
+								  ulmfit_pretrained_path=ulmfit_pretrained_path)
 		elif self.model_name.lower() == 'hcapsnet':
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
-									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
+								  	ulmfit_pretrained_path=ulmfit_pretrained_path)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
-									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc)
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
+									ulmfit_pretrained_path=ulmfit_pretrained_path)
 
 		# Initialize training attributes
 		if 'caps' in self.model_name.lower():

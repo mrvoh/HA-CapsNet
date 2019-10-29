@@ -6,6 +6,7 @@ from layers import *
 import fasttext
 transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
+ULMFIT_OUT_SIZE = 400
 
 class FastTextLearner:
 
@@ -49,7 +50,7 @@ class HAN(nn.Module):
         self.sent_contextualizer = sent_encoder
 
         if word_encoder.lower() == 'ulmfit':
-            word_out = 1150 # static ULMFiT value
+            word_out = ULMFIT_OUT_SIZE # static ULMFiT value
         else:
             word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
         sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() =='gru')  else sent_hidden
@@ -91,17 +92,32 @@ class HAN(nn.Module):
 
 class HGRULWAN(nn.Module):
 
-        def __init__(self, num_tokens, embed_size, sent_gru_hidden, word_gru_hidden, num_classes, bidirectional= True, dropout=0.1, **kwargs):
+        def __init__(self, num_tokens, embed_size, sent_hidden, word_hidden, num_classes, word_encoder = 'gru', bidirectional= True, dropout=0.1,
+                     ulmfit_pretrained_path=None, num_layers_word=1, nhead_word = 4, **kwargs):
             super(HGRULWAN, self).__init__()
 
             # self.batch_size = batch_size
-            self.sent_gru_hidden = sent_gru_hidden
+            self.sent_gru_hidden = sent_hidden
             self.num_classes = num_classes
-            self.word_gru_hidden = word_gru_hidden
+            self.word_gru_hidden = word_hidden
             self.bidirectional = bidirectional
 
-            self.sent_encoder = AttentionWordEncoder('gru', num_tokens, embed_size, word_gru_hidden, bidirectional, dropout=dropout)
-            self.doc_encoder = GRUMultiHeadAtt(sent_gru_hidden, word_gru_hidden, nhead_doc=num_classes,
+            if word_encoder.lower() == 'ulmfit':
+                word_out = ULMFIT_OUT_SIZE # static ULMFiT value
+            else:
+                word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() == 'gru') else word_hidden
+
+            # sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() == 'gru') else sent_hidden
+
+            # self.sent_encoder = ULMFiTEncoder(kwargs['ulmfit_pretrained_path'], num_tokens)
+            self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
+                                                     bidirectional=bidirectional,
+                                                     num_layers=num_layers_word, nhead=nhead_word,
+                                                     ulmfit_pretrained_path=ulmfit_pretrained_path
+                                                     )
+
+
+            self.doc_encoder = GRUMultiHeadAtt(sent_hidden, word_out, nhead_doc=num_classes,
                                                bidirectional=bidirectional, dropout=dropout, aggregate_output=True)
 
         def set_embedding(self, embed_table):
@@ -121,7 +137,8 @@ class HGRULWAN(nn.Module):
 
 class HCapsNet(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100,
+                 ulmfit_pretrained_path=None,**kwargs):
         super(HCapsNet, self).__init__()
 
         # self.batch_size = batch_size
@@ -132,12 +149,16 @@ class HCapsNet(nn.Module):
         self.word_contextualizer = word_encoder
         self.sent_contextualizer = sent_encoder
 
-        word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
+        if word_encoder.lower() == 'ulmfit':
+            word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
+        else:
+            word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() == 'gru') else word_hidden
         sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() =='gru')  else sent_hidden
 
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
-                                                 num_layers=num_layers_word, nhead=nhead_word
+                                                 num_layers=num_layers_word, nhead=nhead_word,
+                                                 ulmfit_pretrained_path=ulmfit_pretrained_path
                                                  )
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
@@ -175,7 +196,8 @@ class HCapsNet(nn.Module):
 
 class HCapsNetMultiHeadAtt(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, nhead_doc = 25, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, nhead_doc = 25,
+                 ulmfit_pretrained_path=None, **kwargs):
         super(HCapsNetMultiHeadAtt, self).__init__()
 
         # self.batch_size = batch_size
@@ -186,7 +208,10 @@ class HCapsNetMultiHeadAtt(nn.Module):
         self.word_contextualizer = word_encoder
         self.sent_contextualizer = sent_encoder
 
-        word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() =='gru')  else word_hidden
+        if word_encoder.lower() == 'ulmfit':
+            word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
+        else:
+            word_out = 2 * word_hidden if (bidirectional and word_encoder.lower() == 'gru') else word_hidden
         sent_out = 2 * sent_hidden if (bidirectional and sent_encoder.lower() =='gru')  else sent_hidden
 
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,

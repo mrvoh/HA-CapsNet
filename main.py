@@ -252,6 +252,7 @@ if __name__ == '__main__':
 	###########################################################################
 
 	assert (args.do_train or args.do_eval), "Either do_train and/or do_eval must be chosen"
+	assert args.model_name.lower() in ['han', 'hgrulwan', 'hcapsnet', 'hcapsnetmultiheadatt'], "The model (--model_name) can be chosen from: HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt."
 	assert args.word_encoder.lower() in ['gru', 'transformer', 'ulmfit'], "The word encoder (--word_encoder) can only be set to GRU, Transformer and ULMFiT."
 	assert args.sent_encoder.lower() in ['gru', 'transformer'], "The sentence encoder (--sent_encoder) can only be set to GRU or Transformer."
 
