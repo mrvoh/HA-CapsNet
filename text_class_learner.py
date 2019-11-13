@@ -168,7 +168,7 @@ class MultiLabelTextClassifier:
 		return self
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, use_glove, word_encoder = 'gru', sent_encoder = 'gru',
-				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=5):
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=5, ulmfit_pretrained_path = None):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -181,17 +181,20 @@ class MultiLabelTextClassifier:
 		self.logger.info("Building model...")
 		if self.model_name.lower() == 'han':
 			self.model = HAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 word_encoder = word_encoder, sent_encoder = sent_encoder)
+							 word_encoder = word_encoder, sent_encoder = sent_encoder, ulmfit_pretrained_path=ulmfit_pretrained_path) #TODO: also adapt for other models
 		elif self.model_name.lower() == 'hgrulwan':
-			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout)
+			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout, word_encoder=word_encoder,
+								  ulmfit_pretrained_path=ulmfit_pretrained_path)
 		elif self.model_name.lower() == 'hcapsnet':
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
-									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
+								  	ulmfit_pretrained_path=ulmfit_pretrained_path)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
-									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc)
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
+									ulmfit_pretrained_path=ulmfit_pretrained_path)
 
 		# Initialize training attributes
 		if 'caps' in self.model_name.lower():
@@ -202,11 +205,12 @@ class MultiLabelTextClassifier:
 		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
 		# Load embeddings
-		vectors = fasttext.load_model(vector_path)
+		if word_encoder.lower() != 'ulmfit':
+			vectors = fasttext.load_model(vector_path)
 
-		glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
-		embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
-		self.model.set_embedding(embed_table)
+			glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
+			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
+			self.model.set_embedding(embed_table)
 
 		self.model.to(self.device)
 

@@ -21,8 +21,8 @@ from collections import Counter
 import fasttext
 from flair.data import Sentence
 
-UNK = '<UNK>'
-PAD = '<PAD>'
+# UNK = '<UNK>'
+# PAD = '<PAD>'
 def doc_to_fasttext(in_path, out_path):
 	# Read in docs
 	with open(in_path, 'rb') as f:
@@ -103,7 +103,7 @@ def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 
 
 
-def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
+def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None, unk='<UNK>'):
 	try:
 		return word_to_idx[word]
 	except KeyError:
@@ -113,7 +113,7 @@ def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None):
 				word_to_idx[word] = idx
 				return idx
 		# map to <UNK>
-		return word_to_idx[UNK]
+		return word_to_idx[unk]
 
 def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_word=50):
 	sample = {}
@@ -135,7 +135,7 @@ def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_wo
 	return sample
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad_idx=0, unk_idx=1, min_freq_word=50):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
@@ -144,8 +144,8 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 	tag_counter = Counter()
 	if word_to_idx is None:
 		word_to_idx = OrderedDict()
-		word_to_idx[PAD] = pad_idx
-		word_to_idx[UNK] = unk_idx
+		word_to_idx[pad] = pad_idx
+		word_to_idx[unk] = unk_idx
 		word_counter = Counter([w for doc in docs for sent in doc.sentences for w in sent])
 
 
@@ -155,7 +155,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None, pad
 		tags = [int(label_to_idx[tag]) for tag in doc.tags]
 		tag_counter.update(tags)
 		# convert sentences to indices of words
-		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word) for w in sent]) for sent in doc.sentences]
+		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for sent in doc.sentences]
 
 		# convert to tensors
 		sample['tags'] = np.zeros(n_labels)
@@ -223,8 +223,8 @@ def get_data_loader(data, batch_size, drop_last, use_rnn):
 
 	loader = DataLoader(data,
 						batch_sampler=sampler,
-						collate_fn=collate_fn)
+						collate_fn=collate_fn,
+						pin_memory=False)
 						# shuffle=True,
 						# num_workers=1)
-
 	return loader
