@@ -173,7 +173,7 @@ class HCapsNet(nn.Module):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
 
-    def forward(self, sents, sents_len, doc_lens):
+    def forward(self, sents, sents_len, doc_lens, encoding):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
@@ -191,8 +191,8 @@ class HCapsNet(nn.Module):
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
-        # TEMP: reconstuction
-        rec_los = self.caps_classifier.reconstruction_loss(doc_encoding.squeeze(1), poses)
+        #TODO TEMP: reconstuction
+        rec_los = self.caps_classifier.reconstruction_loss(encoding, poses)
 
         return activations, word_attn_weight, sent_attn_weight, rec_los
 

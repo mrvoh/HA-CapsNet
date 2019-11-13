@@ -135,7 +135,7 @@ def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_wo
 	return sample
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50, encoder=None):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
@@ -148,8 +148,8 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 		word_to_idx[unk] = unk_idx
 		word_counter = Counter([w for doc in docs for sent in doc.sentences for w in sent])
 
-
-	for doc in docs:
+	print('Loading and converting docs to PyTorch backend...')
+	for doc in tqdm.tqdm(docs):
 		sample = {}
 		# collect tags
 		tags = [int(label_to_idx[tag]) for tag in doc.tags]
@@ -162,6 +162,10 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 		sample['tags'][tags] = 1
 		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
 		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
+
+		if encoder:
+			# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+			sample['encoding'] = encoder.encode(torch.LongTensor([tok for sen in sents for tok in sen]).unsqueeze(0))
 
 		dset.append(sample)
 
@@ -185,6 +189,10 @@ def collate_fn_rnn(batch):
 
 	# PyTorch RNN requires batches to be transposed for speed and integration with CUDA
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
+
+	if 'encoding' in batch[0].keys():
+		encoding_batch = torch.stack([doc['encoding'] for doc in batch])
+		return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch, encoding_batch)
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
 	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)

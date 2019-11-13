@@ -87,6 +87,18 @@ class ULMFiTEncoder(nn.Module):
 
 		self.ulmfit = next(lm.modules())[0]
 
+	def encode(self, x):
+		# Encodes a str as a concatenation of the mean and max pooling of the final hidden state over the whole sequence
+
+		self.ulmfit.reset() # since an internal state is kept
+		h, c = self.ulmfit(x)
+
+		mean_pool = h[-1].mean(dim=1) #TODO: check dim
+		max_pool, _ = h[-1].max(dim=1)
+
+		x = torch.cat([mean_pool, max_pool])
+		return x
+
 	def forward(self, x):
 		# manually reset the hidden states
 		self.ulmfit.reset()
@@ -488,7 +500,7 @@ class CapsNet_Text(nn.Module):
 		# DOC RECONSTRUCTOR
 		self.recon_error_lambda = 0.0005 # factor to scale down reconstruction loss with
 		self.rescale = nn.Parameter(torch.Tensor([7]))
-		reconstruction_size = input_size
+		reconstruction_size = 2300 #TODO: change
 		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)

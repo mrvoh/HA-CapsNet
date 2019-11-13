@@ -266,6 +266,7 @@ class Document:
 		self.short_seqs_thresh = short_seqs_thresh # Max length of sentences to be discarded (to e.g. remove headers from text)
 		self.restructure_doc = restructure_doc # If set to True all sentences longer than split_size_long_seqs will be split and afterwards greedily merged to get length as close as possible to split_size_long_seqs
 		self.split_size_long_seqs = split_size_long_seqs
+		self.encoding = None
 
 		if sentences: # Data already partially preprocessed
 			self.sentences = []
@@ -285,6 +286,10 @@ class Document:
 		self.tags = tags
 		self.text = text
 		self.filename = filename
+
+	def set_encoding(self, enc):
+
+		self.encoding = enc
 
 	def back_translate(self, num_copies):
 		""""

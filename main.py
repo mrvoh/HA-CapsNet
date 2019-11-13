@@ -10,6 +10,8 @@ import json
 import argparse
 import configargparse
 import gc
+import torch
+import tqdm
 # import cProfile, pstats, io
 # from pstats import SortKey
 
@@ -18,6 +20,7 @@ from text_class_learner import MultiLabelTextClassifier
 from eur_lex57k_to_doc import parse as eur_lex_parse
 from reuters_to_doc import parse as reuters_parse
 from model import FastTextLearner
+from layers import ULMFiTEncoder
 
 
 if __name__ == '__main__':
@@ -138,6 +141,9 @@ if __name__ == '__main__':
 	parser.add_argument("--preprocess_all",
 						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
+	parser.add_argument("--create_doc_encodings",
+						action='store_false',
+						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 
 	parser.add_argument("--raw_data_dir",
 						default='dataset\\eur-lex57k',
@@ -244,6 +250,8 @@ if __name__ == '__main__':
 	word_vec_path = args.word_vec_path
 	label_map = None
 	ft_tmp_path = None
+	unk = 'xxunk' if args.word_encoder == 'ulmfit' else '<UNK>'
+	pad = 'xxpad' if args.word_encoder == 'ulmfit' else '<PAD>'
 	# pr = cProfile.Profile()
 	# pr.enable()
 
@@ -273,6 +281,14 @@ if __name__ == '__main__':
 	###########################################################################
 	# DATA PRE-PROCESSING
 	###########################################################################
+	if args.preload_word_to_idx:
+		with open(args.word_to_idx_path, 'r') as f:
+			# idx_to_label = json.load(f)
+			word_to_idx = json.load(f)
+			if args.word_encoder.lower() == 'ulmfit':
+				word_to_idx = {v: i for i, v in enumerate(word_to_idx)}
+	else:
+		word_to_idx = None
 
 	if args.preprocess_all:
 		if args.dataset_name.lower() == 'reuters':
@@ -282,6 +298,17 @@ if __name__ == '__main__':
 				eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
 		else:
 			raise AssertionError('Currently only Reuters and EUR-Lex57k are supported datasets for preprocessing.')
+
+	if args.create_doc_encodings:
+		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx))
+		for p in [train_path, dev_path, test_path]:
+			with open(p, 'rb') as f:
+				docs = pickle.load(f)
+			# set the encoding for all docs
+			[doc.set_encoding(encoder.encode(torch.LongTensor([word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(0))) for doc in tqdm.tqdm(docs)]
+
+			with open(p, 'wb') as f:
+				pickle.dump(docs, f)
 
 	if args.create_wordvecs: # Create word vectors from train documents
 		print('Creating word vectors')
@@ -320,14 +347,7 @@ if __name__ == '__main__':
 		with open(args.label_map_path, 'r') as f:
 			# idx_to_label = json.load(f)
 			label_map = json.load(f)
-	if args.preload_word_to_idx:
-		with open(args.word_to_idx_path, 'r') as f:
-			# idx_to_label = json.load(f)
-			word_to_idx = json.load(f)
-			if args.word_encoder.lower() == 'ulmfit':
-				word_to_idx = {v:i for i,v in enumerate(word_to_idx)}
-	else:
-		word_to_idx = None
+
 
 	# load docs into memory
 	if args.do_train:
@@ -338,9 +358,8 @@ if __name__ == '__main__':
 			dev_docs = pickle.load(f)
 
 
-		unk = 'xxunk' if args.word_encoder == 'ulmfit' else '<UNK>'
-		pad = 'xxpad' if args.word_encoder == 'ulmfit' else '<PAD>'
 
+		# encoder.to(torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'))
 		# get dataloader
 		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,
 																		unk=unk, pad=pad)
@@ -354,6 +373,8 @@ if __name__ == '__main__':
 		# Free some memory
 		del train_dataset
 		del train_docs
+
+
 
 		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,
 																	unk=unk, pad=pad)
