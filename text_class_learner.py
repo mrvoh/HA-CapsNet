@@ -108,6 +108,7 @@ class MultiLabelTextClassifier:
 		self.word_encoder = kwargs.get('word_encoder', None)
 		self.sent_encoder = kwargs.get('sent_encoder', None)
 		self.pretrained_path = kwargs.get('pretrained_path', None)
+		self.ulmfit_pretrained_path = kwargs.get('ulmfit_pretrained_path', None)
 		self.optimizer = kwargs.get('optimizer', None)
 		self.criterion = kwargs.get('criterion', None)
 
@@ -136,6 +137,7 @@ class MultiLabelTextClassifier:
 			"optimizer":self.optimizer,
 			"criterion":self.criterion,
 			"pretrained_path":self.pretrained_path,
+			"ulmfit_pretrained_path":self.ulmfit_pretrained_path,
 			"state_dict":self.model.state_dict()
 		}
 
@@ -176,6 +178,7 @@ class MultiLabelTextClassifier:
 		self.dropout = dropout
 		self.word_encoder = word_encoder
 		self.sent_encoder = sent_encoder
+		self.ulmfit_pretrained_path = ulmfit_pretrained_path
 
 		# Initialize model and load pretrained weights if given
 		self.logger.info("Building model...")
@@ -317,8 +320,8 @@ class MultiLabelTextClassifier:
 			train_step += 1
 			optimizer.zero_grad()
 
-			(sents, sents_len, doc_lens, target) = batch
-			preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens)
+			(sents, sents_len, doc_lens, target, doc_encoding) = batch
+			preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens, doc_encoding)
 
 			loss = criterion(preds, target)
 			# if train_step > (eval_every * 0): #TODO: adapt this after test
@@ -402,9 +405,9 @@ class MultiLabelTextClassifier:
 		with torch.no_grad():
 			for batch_idx, batch in enumerate(dataloader):
 
-				(sents, sents_len, doc_lens, target) = batch
+				(sents, sents_len, doc_lens, target, doc_encoding) = batch
 
-				preds = self.model(sents, sents_len, doc_lens)[0]
+				preds = self.model(sents, sents_len, doc_lens, doc_encoding)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets

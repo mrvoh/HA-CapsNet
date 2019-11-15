@@ -142,12 +142,15 @@ class HCapsNet(nn.Module):
         super(HCapsNet, self).__init__()
 
         # self.batch_size = batch_size
+        self.num_tokens = num_tokens
+        self.embed_size = embed_size
         self.sent_gru_hidden = sent_hidden
         self.n_classes = num_classes
         self.word_hidden = word_hidden
         self.bidirectional = bidirectional
-        self.word_contextualizer = word_encoder
-        self.sent_contextualizer = sent_encoder
+        self.word_encoder = word_encoder
+        self.sent_encoder = sent_encoder
+        self.dropout = dropout
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
@@ -168,6 +171,18 @@ class HCapsNet(nn.Module):
         # self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
+
+
+    def get_init_params(self):
+        # returns the parameters needed to initialize the model as is
+        params = self.word_encoder.get_init_params()
+        params.update(self.doc_encoder.get_init_params())
+
+        params.update(
+            {
+                # CapsNet params
+            }
+        )
 
     def set_embedding(self, embed_table):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})

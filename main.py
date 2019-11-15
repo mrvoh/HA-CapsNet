@@ -142,7 +142,7 @@ if __name__ == '__main__':
 						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--create_doc_encodings",
-						action='store_false',
+						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 
 	parser.add_argument("--raw_data_dir",
@@ -299,13 +299,16 @@ if __name__ == '__main__':
 		else:
 			raise AssertionError('Currently only Reuters and EUR-Lex57k are supported datasets for preprocessing.')
 
+	#TODO: try considering only N last activations of LM to create doc encoding from
+	#TODO: try gradual unfreezing when training
 	if args.create_doc_encodings:
 		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx))
+		encoder.eval()
 		for p in [train_path, dev_path, test_path]:
 			with open(p, 'rb') as f:
 				docs = pickle.load(f)
 			# set the encoding for all docs
-			[doc.set_encoding(encoder.encode(torch.LongTensor([word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(0))) for doc in tqdm.tqdm(docs)]
+			[doc.set_encoding(encoder.encode(torch.LongTensor([word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(0)).detach().numpy()) for doc in tqdm.tqdm(docs)]
 
 			with open(p, 'wb') as f:
 				pickle.dump(docs, f)

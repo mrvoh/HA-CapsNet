@@ -96,7 +96,7 @@ class ULMFiTEncoder(nn.Module):
 		mean_pool = h[-1].mean(dim=1) #TODO: check dim
 		max_pool, _ = h[-1].max(dim=1)
 
-		x = torch.cat([mean_pool, max_pool])
+		x = torch.cat([mean_pool, max_pool], dim=1).squeeze()
 		return x
 
 	def forward(self, x):
@@ -123,6 +123,10 @@ class AttentionWordEncoder(nn.Module):
 		self.lookup = nn.Embedding(num_tokens, embed_size)
 		self.encoder_type = encoder_type
 		self.use_bert = use_bert
+		self.ulmfit_pretrained_path = ulmfit_pretrained_path
+		self.num_layers = num_layers
+		self.nhead = nhead
+		self.bidirectional = bidirectional
 
 		extra_emb_dim = 0
 		if use_bert:
@@ -133,7 +137,6 @@ class AttentionWordEncoder(nn.Module):
 
 		embed_size += extra_emb_dim
 		if encoder_type.lower() == 'gru':
-			self.bidirectional = bidirectional
 			word_out = 2* word_hidden if bidirectional else word_hidden
 			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
@@ -196,6 +199,26 @@ class AttentionWordEncoder(nn.Module):
 		sen_encoding = x1.mul(word_attn_norm).sum(self.seq_dim)
 
 		return sen_encoding, word_attn_norm
+
+
+	def get_init_params(self):
+
+		params = {
+		'num_tokens': self.num_tokens,
+		'embed_size':self.embed_size,
+		'word_hidden':self.word_hidden,
+		'dropout':self.dropout,
+		'embed_size':self.embed_size,
+		'encoder_type':self.encoder_type,
+		'use_bert':self.use_bert,
+		'ulmfit_pretrained_path':self.ulmfit_pretrained_path,
+		'num_layers':self.num_layers,
+		'nhead':self.nhead,
+		'bidirectional':self.bidirectional
+		}
+
+		return params
+
 
 
 class AttentionSentEncoder(nn.Module):
@@ -498,9 +521,9 @@ class CapsNet_Text(nn.Module):
 
 
 		# DOC RECONSTRUCTOR
-		self.recon_error_lambda = 0.0005 # factor to scale down reconstruction loss with
+		self.recon_error_lambda = 0.001 # factor to scale down reconstruction loss with
 		self.rescale = nn.Parameter(torch.Tensor([7]))
-		reconstruction_size = 2300 #TODO: change
+		reconstruction_size = 800 #TODO: change
 		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)

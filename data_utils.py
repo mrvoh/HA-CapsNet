@@ -149,7 +149,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 		word_counter = Counter([w for doc in docs for sent in doc.sentences for w in sent])
 
 	print('Loading and converting docs to PyTorch backend...')
-	for doc in tqdm.tqdm(docs):
+	for doc in docs:
 		sample = {}
 		# collect tags
 		tags = [int(label_to_idx[tag]) for tag in doc.tags]
@@ -163,9 +163,10 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
 		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
 
-		if encoder:
-			# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-			sample['encoding'] = encoder.encode(torch.LongTensor([tok for sen in sents for tok in sen]).unsqueeze(0))
+		sample['encoding'] = torch.FloatTensor(doc.encoding)
+		# if encoder:
+		# 	# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+		# 	sample['encoding'] = encoder.encode(torch.LongTensor([tok for sen in sents for tok in sen]).unsqueeze(0))
 
 		dset.append(sample)
 
@@ -191,7 +192,7 @@ def collate_fn_rnn(batch):
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 	if 'encoding' in batch[0].keys():
-		encoding_batch = torch.stack([doc['encoding'] for doc in batch])
+		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
 		return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch, encoding_batch)
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
@@ -214,6 +215,10 @@ def collate_fn_transformer(batch):
 	sents_len_batch = sents_len_batch.to(device)
 	# doc_lens_batch = doc_lens_batch.to(device)
 	tags_batch = tags_batch.to(device)
+
+	if 'encoding' in batch[0].keys():
+		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
+		return (sents_batch, sents_len_batch, doc_lens_batch, tags_batch, encoding_batch)
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
 	return (sents_batch, sents_len_batch, doc_lens_batch, tags_batch)
