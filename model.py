@@ -175,14 +175,22 @@ class HCapsNet(nn.Module):
 
     def get_init_params(self):
         # returns the parameters needed to initialize the model as is
-        params = self.word_encoder.get_init_params()
+        params = self.sent_encoder.get_init_params()
         params.update(self.doc_encoder.get_init_params())
 
         params.update(
             {
-                # CapsNet params
+                "model_name":"HCapsNet",
+                # "word_to_idx":self.word_to_idx,
+                # "label_to_idx":self.label_to_idx,
+                # "label_map":self.label_map,
+                "num_caps":self.caps_classifier.num_caps,
+                "dim_caps":self.caps_classifier.dim_caps,
+                "num_compressed_caps":self.caps_classifier.num_compressed_caps,
             }
         )
+
+        return params
 
     def set_embedding(self, embed_table):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})

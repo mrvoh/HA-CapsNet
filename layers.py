@@ -204,16 +204,15 @@ class AttentionWordEncoder(nn.Module):
 	def get_init_params(self):
 
 		params = {
-		'num_tokens': self.num_tokens,
 		'embed_size':self.embed_size,
 		'word_hidden':self.word_hidden,
 		'dropout':self.dropout,
 		'embed_size':self.embed_size,
-		'encoder_type':self.encoder_type,
+		'word_encoder':self.encoder_type,
 		'use_bert':self.use_bert,
 		'ulmfit_pretrained_path':self.ulmfit_pretrained_path,
-		'num_layers':self.num_layers,
-		'nhead':self.nhead,
+		'num_layers_word':self.num_layers,
+		'nhead_word':self.nhead,
 		'bidirectional':self.bidirectional
 		}
 
@@ -231,6 +230,10 @@ class AttentionSentEncoder(nn.Module):
 		self.encoder_type = encoder_type
 		self.word_out = word_out
 		self.sent_hidden = sent_hidden
+		self.dropout = dropout
+		self.num_layers = num_layers
+		self.nhead = nhead
+		self.dropout = dropout
 
 		if encoder_type.lower() == 'gru':
 			self.bidirectional = bidirectional
@@ -269,6 +272,19 @@ class AttentionSentEncoder(nn.Module):
 		doc_encoding = x.mul(sent_attn_norm).sum(1)
 
 		return doc_encoding, sent_attn_norm
+
+	def get_init_params(self):
+
+		params = {
+		'sent_hidden':self.sent_hidden,
+		'dropout':self.dropout,
+		'sent_encoder':self.encoder_type,
+		'num_layers_sen':self.num_layers,
+		'nhead_sen':self.nhead,
+		'bidirectional':self.bidirectional
+		}
+
+		return params
 
 
 class GRUMultiHeadAtt(nn.Module):

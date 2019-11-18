@@ -122,24 +122,31 @@ class MultiLabelTextClassifier:
 
 	def save(self, path):
 		self.pretrained_path = path
-		params = {
-			"model_name":self.model_name,
-			"word_to_idx":self.word_to_idx,
-			"label_to_idx":self.label_to_idx,
-			"label_map":self.label_map,
-			"embed_size":self.embed_size,
-			"word_hidden":self.word_hidden,
-			"sent_hidden":self.sent_hidden,
-			"nhead_doc":self.nhead_doc,
-			"dropout":self.dropout,
-			"word_encoder":self.word_encoder,
-			"sent_encoder":self.sent_encoder,
-			"optimizer":self.optimizer,
-			"criterion":self.criterion,
-			"pretrained_path":self.pretrained_path,
-			"ulmfit_pretrained_path":self.ulmfit_pretrained_path,
-			"state_dict":self.model.state_dict()
-		}
+
+		params = self.model.get_init_params()
+		params["state_dict"] = self.model.state_dict()
+		params["word_to_idx"] = self.word_to_idx
+		params["label_to_idx"] = self.label_to_idx
+		params["label_map"] = self.label_map
+		params["criterion"] = self.criterion
+		# params = {
+		# 	"model_name":self.model_name,
+		# 	"word_to_idx":self.word_to_idx,
+		# 	"label_to_idx":self.label_to_idx,
+		# 	"label_map":self.label_map,
+		# 	"embed_size":self.embed_size,
+		# 	"word_hidden":self.word_hidden,
+		# 	"sent_hidden":self.sent_hidden,
+		# 	"nhead_doc":self.nhead_doc,
+		# 	"dropout":self.dropout,
+		# 	"word_encoder":self.word_encoder,
+		# 	"sent_encoder":self.sent_encoder,
+		# 	"optimizer":self.optimizer,
+		# 	"criterion":self.criterion,
+		# 	"pretrained_path":self.pretrained_path,
+		# 	"ulmfit_pretrained_path":self.ulmfit_pretrained_path,
+		# 	"state_dict":self.model.state_dict()
+		# }
 
 		torch.save(params, path)
 

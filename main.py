@@ -426,7 +426,8 @@ if __name__ == '__main__':
 		# get dataloader
 		test_dataset, word_to_idx, _ = process_dataset(test_docs, word_to_idx=word_to_idx,
 																		label_to_idx=label_to_idx,
-																		min_freq_word=args.min_freq_word)
+																		min_freq_word=args.min_freq_word,
+													   					unk=unk, pad = pad)
 
 		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn)
 
