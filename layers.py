@@ -72,13 +72,13 @@ class TransformerEncoder(nn.Module):
 ###################################################################################################
 
 class ULMFiTEncoder(nn.Module):
-	def __init__(self, pretrained_path, num_tokens):
+	def __init__(self, pretrained_path, num_tokens, dropout_factor):
 		super(ULMFiTEncoder, self).__init__()
 		# state_dict = torch.loa
 		config = {'emb_sz': 400, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
 		config['n_hid'] = 1150
 		#TODO: save config in state_dict when finetuning
-		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=1.)
+		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
 		# lm.load_pretrained(pretrained_path)
 		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
 		self.bn = nn.BatchNorm1d(config['emb_sz'])
@@ -113,7 +113,7 @@ class ULMFiTEncoder(nn.Module):
 
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 num_layers = 1, nhead = 4, use_bert = False, ulmfit_pretrained_path = None):
+				 num_layers = 1, nhead = 4, use_bert = False, ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -127,6 +127,7 @@ class AttentionWordEncoder(nn.Module):
 		self.num_layers = num_layers
 		self.nhead = nhead
 		self.bidirectional = bidirectional
+		self.dropout_factor_ulmfit = dropout_factor_ulmfit
 
 		extra_emb_dim = 0
 		if use_bert:
@@ -147,7 +148,7 @@ class AttentionWordEncoder(nn.Module):
 
 			word_out = word_hidden
 		elif encoder_type.lower() == 'ulmfit':
-			self.word_encoder = ULMFiTEncoder(ulmfit_pretrained_path, num_tokens)
+			self.word_encoder = ULMFiTEncoder(ulmfit_pretrained_path, num_tokens, dropout_factor_ulmfit)
 			word_out = 400
 
 		self.weight_W_word = nn.Linear(word_out, word_out)
@@ -211,6 +212,7 @@ class AttentionWordEncoder(nn.Module):
 		'word_encoder':self.encoder_type,
 		'use_bert':self.use_bert,
 		'ulmfit_pretrained_path':self.ulmfit_pretrained_path,
+		'ulmfit_dropout_factor':self.dropout_factor_ulmfit,
 		'num_layers_word':self.num_layers,
 		'nhead_word':self.nhead,
 		'bidirectional':self.bidirectional

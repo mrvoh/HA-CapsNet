@@ -53,11 +53,7 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="The path from where the pretrained model is to be retrieved.")
-	parser.add_argument("--ulmfit_pretrained_path",
-						default=None,
-						type=str,
-						required=False,
-						help="The path from where the pretrained language model is to be retrieved.")
+
 
 	#  TRAIN/EVAL ARGS
 	parser.add_argument("--train_batch_size",
@@ -121,6 +117,16 @@ if __name__ == '__main__':
 	parser.add_argument("--sent_hidden",
 						type=int,
 						help="Nr of hidden units sentence encoder. If GRU is used as encoder, the nr of hidden units is used for BOTH forward and backward pass, resulting in double resulting size.")
+
+	# ulmfit options
+	parser.add_argument("--ulmfit_pretrained_path",
+						default=None,
+						type=str,
+						required=False,
+						help="The path from where the pretrained language model is to be retrieved.")
+	parser.add_argument("--dropout_factor",
+						type=float,
+						help="Multiplier for standard dropout values in ULMFiT ")
 
 		# caps net options
 	parser.add_argument("--dim_caps",

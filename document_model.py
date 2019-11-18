@@ -245,7 +245,7 @@ class TextPreprocessor(object):
 			text = ' '.join(self.ulmfit_tokenizer.process_text(text, self.s))
 
 
-		return [[t for t in sent] for sent in self._spacy_tagger(text).sents]
+		return [[str(t) for t in sent] for sent in self._spacy_tagger(text).sents]
 
 
 class Document:
@@ -273,7 +273,7 @@ class Document:
 			for sentence in sentences:
 				self.sentences.extend([[token.text for token in sent] for sent in text_preprocessor.tokenize_text(sentence)])
 		else: # Full preprocessing still needs to be done
-			self.sentences = text_preprocessor.tokenize_text(text)
+			self.sentences = text_preprocessor.tokenize_text(str(text))
 
 		if self.discard_short_sents:
 			self.sentences = [sent for sent in self.sentences if len(sent) > self.short_seqs_thresh]

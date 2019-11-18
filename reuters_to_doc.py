@@ -18,8 +18,8 @@ def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seq
 	del train_full
 	test_ids = [x for x in reuters.fileids() if 'test' in x]
 	# initiate text preprocessor
-	text_preprocessor = TextPreprocessor(use_ulmfit)
 
+	text_preprocessor = TextPreprocessor(use_ulmfit)
 	# convert each file to a Document
 	for dataset, name in [(train_ids, 'train'), (dev_ids, 'dev'), (test_ids, 'test')]:
 
