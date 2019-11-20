@@ -4,9 +4,11 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import copy
-from transformer import Encoder as TransformerEncoder
+# from transformer import Encoder as TransformerEncoder
 from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
+from fastai.text import *
+# from fastai
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
@@ -69,9 +71,49 @@ class TransformerEncoder(nn.Module):
 # HIERARCHICAL DOC ENCODING LAYERS
 ###################################################################################################
 
+class ULMFiTEncoder(nn.Module):
+	def __init__(self, pretrained_path, num_tokens, dropout_factor):
+		super(ULMFiTEncoder, self).__init__()
+		# state_dict = torch.loa
+		config = {'emb_sz': 400, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
+		config['n_hid'] = 1150
+		#TODO: save config in state_dict when finetuning
+		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
+		# lm.load_pretrained(pretrained_path)
+		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
+		self.bn = nn.BatchNorm1d(config['emb_sz'])
+		self.ulmfit = lm
+		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
+
+		self.ulmfit = next(lm.modules())[0]
+
+	def encode(self, x):
+		# Encodes a str as a concatenation of the mean and max pooling of the final hidden state over the whole sequence
+
+		self.ulmfit.reset() # since an internal state is kept
+		h, c = self.ulmfit(x)
+
+		mean_pool = h[-1].mean(dim=1) #TODO: check dim
+		max_pool, _ = h[-1].max(dim=1)
+
+		x = torch.cat([mean_pool, max_pool], dim=1).squeeze()
+		return x
+
+	def forward(self, x):
+		# manually reset the hidden states
+		self.ulmfit.reset()
+
+		h, c = self.ulmfit(x)
+
+		x = h[-1]#[:,-1,:] # final hidden state
+		x = self.bn(x.permute(0,2,1)).permute(0,2,1)
+
+		# x_max = self.bn(x_max)
+		return x
+
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 num_layers = 1, nhead = 4, use_bert = False):
+				 num_layers = 1, nhead = 4, use_bert = False, ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -81,6 +123,11 @@ class AttentionWordEncoder(nn.Module):
 		self.lookup = nn.Embedding(num_tokens, embed_size)
 		self.encoder_type = encoder_type
 		self.use_bert = use_bert
+		self.ulmfit_pretrained_path = ulmfit_pretrained_path
+		self.num_layers = num_layers
+		self.nhead = nhead
+		self.bidirectional = bidirectional
+		self.dropout_factor_ulmfit = dropout_factor_ulmfit
 
 		extra_emb_dim = 0
 		if use_bert:
@@ -91,7 +138,6 @@ class AttentionWordEncoder(nn.Module):
 
 		embed_size += extra_emb_dim
 		if encoder_type.lower() == 'gru':
-			self.bidirectional = bidirectional
 			word_out = 2* word_hidden if bidirectional else word_hidden
 			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
@@ -101,6 +147,9 @@ class AttentionWordEncoder(nn.Module):
 			self.word_encoder = TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
 
 			word_out = word_hidden
+		elif encoder_type.lower() == 'ulmfit':
+			self.word_encoder = ULMFiTEncoder(ulmfit_pretrained_path, num_tokens, dropout_factor_ulmfit)
+			word_out = 400
 
 		self.weight_W_word = nn.Linear(word_out, word_out)
 		self.weight_proj_word = nn.Parameter(torch.Tensor(word_out, 1))
@@ -115,27 +164,32 @@ class AttentionWordEncoder(nn.Module):
 
 	def forward(self, x):
 
-		# embeddings
-		x_emb = self.lookup(x)
-		N,B,d_c = x_emb.shape
+		if self.encoder_type.lower() == 'ulmfit': # ULMFit flow
+			x1 = self.word_encoder(x)
+		else: # Regular word embeddings flow
+			# embeddings
+			x_emb = self.lookup(x)
+			N,B,d_c = x_emb.shape
 
-		if self.use_bert: # Get extra embeddings
+			if self.use_bert: # Get extra embeddings
 
-			# self.bert_embedding.embed(text)
-			[self.bert_embedding.embed(t) for t in chunker(text, 10**6)]
-			# t = [tok.embedding for tok in text[0]]
-			extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
-			extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
-			extra_embeddings = extra_embeddings.to(x_emb.device)
+				# self.bert_embedding.embed(text)
+				[self.bert_embedding.embed(t) for t in chunker(text, 10**6)]
+				# t = [tok.embedding for tok in text[0]]
+				extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
+				extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
+				extra_embeddings = extra_embeddings.to(x_emb.device)
 
-			x_emb = torch.cat([x_emb, extra_embeddings.permute(1,0,2)],dim=2)
+				x_emb = torch.cat([x_emb, extra_embeddings.permute(1,0,2)],dim=2)
 
 
-		if self.encoder_type.lower() == 'gru':
-			x1, _ = self.word_encoder(self.drop1(x_emb))
-		elif self.encoder_type.lower() == 'transformer':
-			x1 = self.word_encoder(self.drop1(x_emb))
-			# x1 = x1.permute(1,0,2)
+			if self.encoder_type.lower() == 'gru':
+				x1, _ = self.word_encoder(self.drop1(x_emb))
+			elif self.encoder_type.lower() == 'transformer':
+				x1 = self.word_encoder(self.drop1(x_emb))
+				# x1 = x1.permute(1,0,2)
+			elif self.encoder_type.lower() == 'ulmfit':
+				x1 = self.word_encoder(x)
 		# compute attention
 		Hw = torch.tanh(self.weight_W_word(x1))
 		Hw = Hw + x1  # residual connection
@@ -148,6 +202,26 @@ class AttentionWordEncoder(nn.Module):
 		return sen_encoding, word_attn_norm
 
 
+	def get_init_params(self):
+
+		params = {
+		'embed_size':self.embed_size,
+		'word_hidden':self.word_hidden,
+		'dropout':self.dropout,
+		'embed_size':self.embed_size,
+		'word_encoder':self.encoder_type,
+		'use_bert':self.use_bert,
+		'ulmfit_pretrained_path':self.ulmfit_pretrained_path,
+		'ulmfit_dropout_factor':self.dropout_factor_ulmfit,
+		'num_layers_word':self.num_layers,
+		'nhead_word':self.nhead,
+		'bidirectional':self.bidirectional
+		}
+
+		return params
+
+
+
 class AttentionSentEncoder(nn.Module):
 
 	def __init__(self, encoder_type, sent_hidden, word_out, bidirectional=True,
@@ -158,6 +232,10 @@ class AttentionSentEncoder(nn.Module):
 		self.encoder_type = encoder_type
 		self.word_out = word_out
 		self.sent_hidden = sent_hidden
+		self.dropout = dropout
+		self.num_layers = num_layers
+		self.nhead = nhead
+		self.dropout = dropout
 
 		if encoder_type.lower() == 'gru':
 			self.bidirectional = bidirectional
@@ -197,6 +275,19 @@ class AttentionSentEncoder(nn.Module):
 
 		return doc_encoding, sent_attn_norm
 
+	def get_init_params(self):
+
+		params = {
+		'sent_hidden':self.sent_hidden,
+		'dropout':self.dropout,
+		'sent_encoder':self.encoder_type,
+		'num_layers_sen':self.num_layers,
+		'nhead_sen':self.nhead,
+		'bidirectional':self.bidirectional
+		}
+
+		return params
+
 
 class GRUMultiHeadAtt(nn.Module):
 	""""
@@ -207,7 +298,7 @@ class GRUMultiHeadAtt(nn.Module):
 		super(GRUMultiHeadAtt, self).__init__()
 
 		# self.batch_size = batch_size
-		self.sent_gru_hidden = sent_hidden
+		self.sent_hidden = sent_hidden
 		self.nhead_doc = nhead_doc
 		self.word_out = word_out
 		self.bidirectional = bidirectional
@@ -232,6 +323,18 @@ class GRUMultiHeadAtt(nn.Module):
 
 			self.out = nn.Parameter(torch.Tensor(nhead_doc, sent_gru_out))
 			self.out.data.normal_(0, 1 / np.sqrt(sent_gru_out))
+
+	def get_init_params(self):
+
+		params = {
+		'sent_hidden':self.sent_hidden,
+		'dropout':self.dropout,
+		'sent_encoder':'gru',
+		'nhead_doc':self.nhead_doc,
+		'bidirectional':self.bidirectional
+		}
+
+		return params
 
 	def forward(self, word_attention_vectors):
 
@@ -426,7 +529,7 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps):
+	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
@@ -446,6 +549,21 @@ class CapsNet_Text(nn.Module):
 		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,
 								  in_channels=num_caps, out_channels=num_caps)
 
+		#TODO: test dropout
+		self.drop = nn.Dropout(p=dropout_caps)
+
+		# DOC RECONSTRUCTOR
+		self.recon_error_lambda = 0.001 # factor to scale down reconstruction loss with
+		self.rescale = nn.Parameter(torch.Tensor([7]))
+		reconstruction_size = 800 #TODO: change
+		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
+		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
+		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
+		self.bn = nn.BatchNorm2d(num_classes)
+
+		self.relu = nn.ReLU(inplace=True)
+		self.sigmoid = nn.Sigmoid()
+
 	def compression(self, poses, W):
 		poses = torch.matmul(poses.permute(0,2,1), W).permute(0,2,1)
 		activations = torch.sqrt((poses ** 2).sum(2))
@@ -454,7 +572,10 @@ class CapsNet_Text(nn.Module):
 	def forward(self, doc):
 
 		poses_doc, activations_doc = self.primary_capsules_doc(doc)
+		poses_doc = self.drop(poses_doc)
 		poses, activations = self.flatten_capsules(poses_doc, activations_doc)
+
+		#TODO: test 1d vs 2d dropout as regularization
 		poses, activations = self.compression(poses, self.W_doc)
 		poses, activations = self.fc_capsules_doc_child(poses)
 		return poses, activations
@@ -473,6 +594,54 @@ class CapsNet_Text(nn.Module):
 		poses, activations = self.fc_capsules_doc_child(poses, activations, labels) #parallel model is used for restricting solution space
 		# poses = poses.unsqueeze(2)
 		return poses, activations
+
+	def reconstruction_loss(self, doc_enc, input, size_average=True):
+		# Get the lengths of capsule outputs.
+		input = self.bn(input)
+		v_mag = torch.sqrt((input ** 2).sum(dim=2))
+
+		# Get index of longest capsule output.
+		_, v_max_index = v_mag.max(dim=1)
+		v_max_index = v_max_index.data
+
+		# Use just the winning capsule's representation (and zeros for other capsules) to reconstruct input image.
+		batch_size = input.size(0)
+		all_masked = [None] * batch_size
+		for batch_idx in range(batch_size):
+			# Get one sample from the batch.
+			input_batch = input[batch_idx]
+
+			# Copy only the maximum capsule index from this batch sample.
+			# This masks out (leaves as zero) the other capsules in this sample.
+			batch_masked = Variable(torch.zeros(input_batch.size())).cuda()
+			batch_masked[v_max_index[batch_idx]] = input_batch[v_max_index[batch_idx]]
+			all_masked[batch_idx] = batch_masked
+
+		# Stack masked capsules over the batch dimension.
+		masked = torch.stack(all_masked, dim=0)
+
+		# Reconstruct doc encoding.
+		masked = masked.view(input.size(0), -1)
+		# masked = masked * torch.pow(10,self.rescale) #test
+		output = self.relu(self.reconstruct0(masked))
+		output = self.relu(self.reconstruct1(output))
+		output = self.reconstruct2(output)
+		# output = output.view(-1, self.image_channels, self.image_height, self.image_width)
+		#test: normalize doc encoding and reconstruction
+		# output = output.div(output.norm(p=2, dim=1, keepdim=True))
+		# doc_enc = doc_enc.div(doc_enc.norm(p=2, dim=1, keepdim=True))
+		# The reconstruction loss is the sum squared difference between the input image and reconstructed image.
+		# Multiplied by a small number so it doesn't dominate the margin (class) loss.
+		error = (output - doc_enc)
+		# error = error.view(output.size(0), -1)
+		error = error ** 2
+		error = torch.sum(error, dim=1) * self.recon_error_lambda
+
+		# Average over batch
+		if size_average:
+			error = error.mean()
+
+		return error
 
 
 ###################################################################################################

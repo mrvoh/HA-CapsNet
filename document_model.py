@@ -10,6 +10,10 @@ from joblib import Parallel, delayed
 from textblob import TextBlob
 from textblob.translate import NotTranslated
 
+from fastai.text.transform import Tokenizer as ULMFiTTokenizer
+from fastai.text.transform import SpacyTokenizer
+
+# language mapping for backtranslation
 LANG_MAP= {
     'af': 'afrikaans',
     'sq': 'albanian',
@@ -199,71 +203,83 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
+def translate(text, inter_lang, src_lang='en'):
+	""""
+	Translates text to inter_lang and then back to src_lang as means of data augmentation
+	Translation performed using Google Translate API
+	"""
+	if hasattr(text, "decode"):
+		text = text.decode("utf-8")
 
-def translate(comment, language):
-	if hasattr(comment, "decode"):
-		comment = comment.decode("utf-8")
-
-	text = TextBlob(comment)
+	text = TextBlob(text)
 	try:
-		text = text.translate(to=language)
-		text = text.translate(to="en")
+		text = text.translate(to=inter_lang)
+		text = text.translate(to=src_lang)
 	except NotTranslated:
 		print('NOT TRANSLATED')
 		pass
 
 	return str(text)
 
-class Tagger(object):
 
-
-	def __init__(self, preprocess = True):
-		self._spacy_tagger = spacy.load('en', disable=['parser', 'ner'])
+class TextPreprocessor(object):
+	""""
+	Normalizes and tokenizes text
+	"""
+	def __init__(self, ulmfit_preprocessing = True, lang='en'):
+		self._spacy_tagger = spacy.load(lang, disable=['parser', 'ner'])
 		self._spacy_tagger.add_pipe(self._spacy_tagger.create_pipe('sentencizer'))
 
-		self.preprocess = preprocess
+		self.ulmfit_preprocessing = ulmfit_preprocessing
+		if ulmfit_preprocessing:
+			self.ulmfit_tokenizer = ULMFiTTokenizer()
+			self.s = SpacyTokenizer(lang) # used by ulmfit tokenizer
 
 	def tokenize_text(self, text: str):
 
-		if self.preprocess:
+		if not self.ulmfit_preprocessing: # standard preprocessing
 			text = lowercase_and_remove_accent(text)
 			text = remove_non_printing_char(text)
 			text = replace_unicode_punct(text)
-		# x = [[t for t in sent] for sent in self._spacy_tagger(text).sents]
-		return [[t for t in sent] for sent in self._spacy_tagger(text).sents]
+		else: # ULMFiT-specific preprocessing
+			text = ' '.join(self.ulmfit_tokenizer.process_text(text, self.s))
+
+
+		return [[str(t) for t in sent] for sent in self._spacy_tagger(text).sents]
 
 
 class Document:
 	"""
 	A document is a combination of text and the positions of the tags in that text.
 	"""
-	tagger = Tagger()
-	translator = BackTranslator()
-	#
-	# 	# SHORT_SEN_TRESH = 3
+	# text_preprocessor = TextPreprocessor()
 
-	def __init__(self, text, tags, sentences=None, filename=None, restructure_doc = True, split_size_long_seqs=50):
+	def __init__(self,tags, text_preprocessor, text=None,  sentences=None, filename=None, restructure_doc = True, split_size_long_seqs=50, discard_short_sents=False, short_seqs_thresh=3):
 		"""
 		:param text: document text as a string
 		:param tags: list of Tag objects
 		"""
 
+		assert text or sentences, "To instantiate a Document, either a list of sentences or a full text must be given"
 
-
+		self.discard_short_sents = discard_short_sents # whether or not to remove extremely short sentences from data
+		self.short_seqs_thresh = short_seqs_thresh # Max length of sentences to be discarded (to e.g. remove headers from text)
 		self.restructure_doc = restructure_doc # If set to True all sentences longer than split_size_long_seqs will be split and afterwards greedily merged to get length as close as possible to split_size_long_seqs
 		self.split_size_long_seqs = split_size_long_seqs
-		# print(text)
-		# self.tokens = [[token.text for token in sent] for sent in Document.tagger.tokenize_text(text)]
+		self.encoding = None
 
-		if sentences:
+		if sentences: # Data already partially preprocessed
 			self.sentences = []
 			for sentence in sentences:
-				self.sentences.extend([[token.text for token in sent] for sent in Document.tagger.tokenize_text(sentence)])#[token.text for token in Document.tagger.tokenize_text(sentence)])
+				self.sentences.extend([[token for token in sent] for sent in text_preprocessor.tokenize_text(sentence)])
+		else: # Full preprocessing still needs to be done
+			self.sentences = text_preprocessor.tokenize_text(str(text))
 
-		# if self.discard_short_sents:
-		# 	self.sentences = [sent for sent in self.sentences if len(sent) > self.SHORT_SEN_TRESH]
+		if self.discard_short_sents:
+			self.sentences = [sent for sent in self.sentences if len(sent) > self.short_seqs_thresh]
 
 		# Split seqs longer than split_size_long_seqs for computational efficiency
+		# After splitting, chunks are greedily merged back together to get the biggest chunks allowed
 		if self.restructure_doc:
 			self._split_long_seqs()
 
@@ -271,8 +287,14 @@ class Document:
 		self.text = text
 		self.filename = filename
 
-	def back_translate(self, num_copies):
+	def set_encoding(self, enc):
 
+		self.encoding = enc
+
+	def back_translate(self, num_copies):
+		""""
+		Using this function might require (payed) credentials for the Google Translate API.
+		"""
 		sents = [" ".join(sen) for sen in self.sentences]
 		copies = [Document(
 			sentences=[translate(sen, LANGUAGES[i]) for sen in sents],
@@ -283,23 +305,20 @@ class Document:
 
 		return copies
 
-	def back_translate1(self, num_copies): #TODO: look into https://github.com/PavelOstyakov/toxic/blob/master/tools/extend_dataset.py
-
-		sents = [" ".join(sen) for sen in self.sentences]
-		copies = [Document(
-			sentences = [Document.translator.backtranslate(sen, src='en', mid=LANGUAGES[i]).text for sen in sents],
-			text = '',
-			tags=self.tags)
-			for i in range(num_copies)
-		]
-
-		return copies
-
 	def get_text_sentences(self):
+		# Return list of all sentences in doc
 		return [" ".join(sen) for sen in self.sentences]
 
-	def _merge_short_seqs(self):
 
+	##################################################################################
+	# Helper functions
+	##################################################################################
+
+	def _merge_short_seqs(self):
+		"""
+		Greedily merge short sentences up until the split_size_long_seqs is reached
+		This greatly improves computational efficiency
+		"""
 		sents = []
 		curr_sen = []
 		for sen in self.sentences:
@@ -309,17 +328,17 @@ class Document:
 				sents.append(curr_sen)
 				curr_sen = []
 
-		if curr_sen != []:
+		if curr_sen != []: # When a doc contains only one sentence this statement is triggered
 			sents.append(curr_sen)
 
 		self.sentences = sents
 
 	def _split_long_seqs(self):
-
+		"""
+		Split long sequences such that all sentences have a length <= split_size_long_seqs
+		First long sequences are split on punctuation, then on index if still necessary
+		"""
 		res = []
-		split_punct = [',',';', ':','?','!', '/']
-
-		# res = [re.split('[?,.;:\-!]'," ".join(sen)) if len(sen) > self.split_size_long_seqs else sen for sen in self.sentences]
 
 		# first split on punctuation
 		for sen in self.sentences:
@@ -332,7 +351,6 @@ class Document:
 					res.extend(s)
 			else:
 				res.append(sen)
-
 
 		assert len(res) >= len(self.sentences), "Splitting of long sentences went wrong"
 

@@ -80,6 +80,7 @@ class MultiLabelTextClassifier:
 				 dropout = 0.1, K=5, verbose=True, **kwargs):
 
 		self.model_name = model_name
+		self.use_doc_encoding = 'caps' in model_name.lower()
 		self.model = None
 		self.word_to_idx = word_to_idx
 		self.label_to_idx = label_to_idx # Maps label_ids to index in model
@@ -108,6 +109,7 @@ class MultiLabelTextClassifier:
 		self.word_encoder = kwargs.get('word_encoder', None)
 		self.sent_encoder = kwargs.get('sent_encoder', None)
 		self.pretrained_path = kwargs.get('pretrained_path', None)
+		self.ulmfit_pretrained_path = kwargs.get('ulmfit_pretrained_path', None)
 		self.optimizer = kwargs.get('optimizer', None)
 		self.criterion = kwargs.get('criterion', None)
 
@@ -121,23 +123,31 @@ class MultiLabelTextClassifier:
 
 	def save(self, path):
 		self.pretrained_path = path
-		params = {
-			"model_name":self.model_name,
-			"word_to_idx":self.word_to_idx,
-			"label_to_idx":self.label_to_idx,
-			"label_map":self.label_map,
-			"embed_size":self.embed_size,
-			"word_hidden":self.word_hidden,
-			"sent_hidden":self.sent_hidden,
-			"nhead_doc":self.nhead_doc,
-			"dropout":self.dropout,
-			"word_encoder":self.word_encoder,
-			"sent_encoder":self.sent_encoder,
-			"optimizer":self.optimizer,
-			"criterion":self.criterion,
-			"pretrained_path":self.pretrained_path,
-			"state_dict":self.model.state_dict()
-		}
+
+		params = self.model.get_init_params()
+		params["state_dict"] = self.model.state_dict()
+		params["word_to_idx"] = self.word_to_idx
+		params["label_to_idx"] = self.label_to_idx
+		params["label_map"] = self.label_map
+		params["criterion"] = self.criterion
+		# params = {
+		# 	"model_name":self.model_name,
+		# 	"word_to_idx":self.word_to_idx,
+		# 	"label_to_idx":self.label_to_idx,
+		# 	"label_map":self.label_map,
+		# 	"embed_size":self.embed_size,
+		# 	"word_hidden":self.word_hidden,
+		# 	"sent_hidden":self.sent_hidden,
+		# 	"nhead_doc":self.nhead_doc,
+		# 	"dropout":self.dropout,
+		# 	"word_encoder":self.word_encoder,
+		# 	"sent_encoder":self.sent_encoder,
+		# 	"optimizer":self.optimizer,
+		# 	"criterion":self.criterion,
+		# 	"pretrained_path":self.pretrained_path,
+		# 	"ulmfit_pretrained_path":self.ulmfit_pretrained_path,
+		# 	"state_dict":self.model.state_dict()
+		# }
 
 		torch.save(params, path)
 
@@ -168,7 +178,8 @@ class MultiLabelTextClassifier:
 		return self
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, use_glove, word_encoder = 'gru', sent_encoder = 'gru',
-				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=5):
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, pos_weight=None, nhead_doc=5,
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -176,37 +187,45 @@ class MultiLabelTextClassifier:
 		self.dropout = dropout
 		self.word_encoder = word_encoder
 		self.sent_encoder = sent_encoder
+		self.ulmfit_pretrained_path = ulmfit_pretrained_path
 
 		# Initialize model and load pretrained weights if given
 		self.logger.info("Building model...")
 		if self.model_name.lower() == 'han':
 			self.model = HAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 word_encoder = word_encoder, sent_encoder = sent_encoder)
+							 word_encoder = word_encoder, sent_encoder = sent_encoder, ulmfit_pretrained_path=ulmfit_pretrained_path,
+							 dropout_factor_ulmfit=dropout_factor_ulmfit) #TODO: also adapt for other models
 		elif self.model_name.lower() == 'hgrulwan':
-			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout)
+			self.model = HGRULWAN(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout, word_encoder=word_encoder,
+								  ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit)
 		elif self.model_name.lower() == 'hcapsnet':
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
-									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
+								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
-									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc)
+							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
+									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
+									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit)
 
 		# Initialize training attributes
 		if 'caps' in self.model_name.lower():
 			self.criterion = torch.nn.BCELoss()
 		else:
-			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='mean')
+			if pos_weight:
+				pos_weight = torch.tensor(pos_weight).to(self.device)
+			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 
 		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
 		# Load embeddings
-		vectors = fasttext.load_model(vector_path)
+		if word_encoder.lower() != 'ulmfit':
+			vectors = fasttext.load_model(vector_path)
 
-		glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
-		embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
-		self.model.set_embedding(embed_table)
+			glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
+			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
+			self.model.set_embedding(embed_table)
 
 		self.model.to(self.device)
 
@@ -313,10 +332,14 @@ class MultiLabelTextClassifier:
 			train_step += 1
 			optimizer.zero_grad()
 
-			(sents, sents_len, doc_lens, target) = batch
-			preds, word_attention_scores, sent_attention_scores = self.model(sents, sents_len, doc_lens)
+			(sents, sents_len, doc_lens, target, doc_encoding) = batch
+			if self.use_doc_encoding: # Capsule based models
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens, doc_encoding)
+			else: # Other models
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens) # rec loss defaults to 0 for non-CapsNet models
 
 			loss = criterion(preds, target)
+			loss += rec_loss
 			tr_loss += loss.item()
 
 			if APEX_AVAILABLE:
@@ -325,8 +348,9 @@ class MultiLabelTextClassifier:
 			else:
 				loss.backward()
 
+			# torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
 			optimizer.step()
-			prog.update(batch_idx + 1, values=[("train loss", loss.item())])
+			prog.update(batch_idx + 1, values=[("train loss", loss.item()), ("recon loss", rec_loss)])
 			torch.cuda.empty_cache()
 
 			if train_step % eval_every == 0:
@@ -395,9 +419,12 @@ class MultiLabelTextClassifier:
 		with torch.no_grad():
 			for batch_idx, batch in enumerate(dataloader):
 
-				(sents, sents_len, doc_lens, target) = batch
+				(sents, sents_len, doc_lens, target, doc_encoding) = batch
 
-				preds, _, _ = self.model(sents, sents_len, doc_lens)
+				if self.use_doc_encoding:  # Capsule based models
+					preds = self.model(sents, sents_len, doc_lens, doc_encoding)[0]
+				else:
+					preds = self.model(sents, sents_len, doc_lens)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets
