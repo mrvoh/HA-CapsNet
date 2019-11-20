@@ -271,7 +271,7 @@ class Document:
 		if sentences: # Data already partially preprocessed
 			self.sentences = []
 			for sentence in sentences:
-				self.sentences.extend([[token.text for token in sent] for sent in text_preprocessor.tokenize_text(sentence)])
+				self.sentences.extend([[token for token in sent] for sent in text_preprocessor.tokenize_text(sentence)])
 		else: # Full preprocessing still needs to be done
 			self.sentences = text_preprocessor.tokenize_text(str(text))
 

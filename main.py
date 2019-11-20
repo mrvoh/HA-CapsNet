@@ -19,6 +19,7 @@ from data_utils import process_dataset, get_data_loader, embeddings_from_docs, d
 from text_class_learner import MultiLabelTextClassifier
 from eur_lex57k_to_doc import parse as eur_lex_parse
 from reuters_to_doc import parse as reuters_parse
+from csv_to_documents import sheet_to_docs as parse_sheet
 from model import FastTextLearner
 from layers import ULMFiTEncoder
 
@@ -145,14 +146,14 @@ if __name__ == '__main__':
 
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_true',
+						action='store_false',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--create_doc_encodings",
-						action='store_true',
+						action='store_false',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 
 	parser.add_argument("--raw_data_dir",
-						default='dataset\\eur-lex57k',
+						default=r'C:\Users\nvanderheijden\Documents\Regminer\regminer-topic-modelling\modeling\train_filtered.xlsx',
 						type=str,
 						required=False,
 						help="Dir from where to parse the data.")
@@ -160,17 +161,28 @@ if __name__ == '__main__':
 						default=100,
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
+	parser.add_argument("--max_seq_len",
+						default=100,
+						type=int,
+						help="Number of labels to use from the data (filters top N occurring)")
+	parser.add_argument("--restructure_docs",
+						action='store_false',
+						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
 	parser.add_argument("--dataset_name",
-						default='reuters',
+						default='sheet',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
 	parser.add_argument("--percentage_train",
-						default=0.9,
+						default=0.8,
+						type=float,
+						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
+	parser.add_argument("--percentage_dev",
+						default=0.1,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",
-						default='dataset',
+						default='dataset\\regminer',
 						type=str,
 						required=False,
 						help="Where to write the parsed data to.")
@@ -284,6 +296,8 @@ if __name__ == '__main__':
 		assert args.raw_data_dir, "When --preprocess_all is set, --raw_data_dir must also be set"
 		assert args.write_data_dir, "When --preprocess_all is set, --write_data_dir must also be set"
 
+		assert args.percentage_train + args.percentage_dev <= 1., "The percentage of data used for training and testing cannot be more than 100% together"
+
 	###########################################################################
 	# DATA PRE-PROCESSING
 	###########################################################################
@@ -296,19 +310,22 @@ if __name__ == '__main__':
 	else:
 		word_to_idx = None
 
+	# TODO: refactor data reading --> only from df?
 	if args.preprocess_all:
 		if args.dataset_name.lower() == 'reuters':
 			reuters_parse(args.write_data_dir, args.percentage_train, use_ulmfit=args.word_encoder.lower()=='ulmfit')
 		elif args.dataset_name.lower() == 'eur-lex57k':
 			label_to_idx_path, train_path, dev_path, test_path = \
 				eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
+		elif args.dataset_name.lower() == 'sheet':
+			parse_sheet(args.raw_data_dir, args.write_data_dir, args.percentage_dev, 1.-args.percentage_train-args.percentage_dev, use_ulmfit=args.word_encoder.lower()=='ulmfit')
 		else:
-			raise AssertionError('Currently only Reuters and EUR-Lex57k are supported datasets for preprocessing.')
+			raise AssertionError('Currently only Reuters, sheets and EUR-Lex57k are supported datasets for preprocessing.')
 
 	#TODO: try considering only N last activations of LM to create doc encoding from
 	#TODO: try gradual unfreezing when training
 	if args.create_doc_encodings:
-		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx))
+		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx), args.dropout_factor)
 		encoder.eval()
 		for p in [train_path, dev_path, test_path]:
 			with open(p, 'rb') as f:
@@ -409,7 +426,7 @@ if __name__ == '__main__':
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout, args.word_vec_path, args.use_glove,
 									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder, pos_weight=pos_weight,
 									  dim_caps=args.dim_caps, num_caps=args.num_caps, num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
-									  ulmfit_pretrained_path=args.ulmfit_pretrained_path)
+									  ulmfit_pretrained_path=args.ulmfit_pretrained_path, dropout_factor_ulmfit=args.dropout_factor)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

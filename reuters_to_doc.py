@@ -22,7 +22,8 @@ def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seq
 	text_preprocessor = TextPreprocessor(use_ulmfit)
 	# convert each file to a Document
 	for dataset, name in [(train_ids, 'train'), (dev_ids, 'dev'), (test_ids, 'test')]:
-
+		if len(dataset) == 0:
+			continue
 		docs = [Document(text='',
 						 text_preprocessor = text_preprocessor,
 						 filename = doc_id,
