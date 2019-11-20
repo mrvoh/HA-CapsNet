@@ -38,7 +38,7 @@ class FastTextLearner:
 class HAN(nn.Module):
 
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, ulmfit_pretrained_path = None, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0,**kwargs):
         super(HAN, self).__init__()
 
         # self.batch_size = batch_size
@@ -59,7 +59,8 @@ class HAN(nn.Module):
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
                                                  num_layers=num_layers_word, nhead=nhead_word,
-                                                 ulmfit_pretrained_path=ulmfit_pretrained_path
+                                                 ulmfit_pretrained_path=ulmfit_pretrained_path,
+                                                 dropout_factor_ulmfit=dropout_factor_ulmfit
                                                  )
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
@@ -71,6 +72,19 @@ class HAN(nn.Module):
 
     def set_embedding(self, embed_table):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
+
+    def get_init_params(self):
+        # returns the parameters needed to initialize the model as is
+        params = self.sent_encoder.get_init_params()
+        params.update(self.doc_encoder.get_init_params())
+
+        params.update(
+            {
+                "model_name": "HAN",
+            }
+        )
+
+        return params
 
 
     def forward(self, sents, sents_len, doc_lens):
@@ -87,13 +101,13 @@ class HAN(nn.Module):
 
         y_pred = self.out(doc_encoding)
 
-        return y_pred, word_attn_weight, sent_attn_weight #TODO: split out forward and predict fn for attn_weights?
+        return y_pred, word_attn_weight, sent_attn_weight, 0 # return 0 as reconstruction loss for caps nets
 
 
 class HGRULWAN(nn.Module):
 
         def __init__(self, num_tokens, embed_size, sent_hidden, word_hidden, num_classes, word_encoder = 'gru', bidirectional= True, dropout=0.1,
-                     ulmfit_pretrained_path=None, num_layers_word=1, nhead_word = 4, **kwargs):
+                     ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0, num_layers_word=1, nhead_word = 4, **kwargs):
             super(HGRULWAN, self).__init__()
 
             # self.batch_size = batch_size
@@ -113,7 +127,8 @@ class HGRULWAN(nn.Module):
             self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                      bidirectional=bidirectional,
                                                      num_layers=num_layers_word, nhead=nhead_word,
-                                                     ulmfit_pretrained_path=ulmfit_pretrained_path
+                                                     ulmfit_pretrained_path=ulmfit_pretrained_path,
+                                                    dropout_factor_ulmfit=dropout_factor_ulmfit
                                                      )
 
 
@@ -122,6 +137,19 @@ class HGRULWAN(nn.Module):
 
         def set_embedding(self, embed_table):
             self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
+
+        def get_init_params(self):
+            # returns the parameters needed to initialize the model as is
+            params = self.sent_encoder.get_init_params()
+            params.update(self.doc_encoder.get_init_params())
+
+            params.update(
+                {
+                    "model_name": "HGRULWAN",
+                }
+            )
+
+            return params
 
         def forward(self, sents, sents_len, doc_lens):
 
@@ -132,13 +160,13 @@ class HGRULWAN(nn.Module):
             sen_encodings, _ = stack_and_pad_tensors(sen_encodings) #
             # get predictions
             y_pred, sent_attn_weight = self.doc_encoder(sen_encodings)
-            return y_pred, word_attn_weight, sent_attn_weight
+            return y_pred, word_attn_weight, sent_attn_weight, 0 # return 0 as reconstruction loss for caps nets
 
 
 class HCapsNet(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100,
-                 ulmfit_pretrained_path=None,**kwargs):
+                 dropout_caps = 0.2, ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0,**kwargs):
         super(HCapsNet, self).__init__()
 
         # self.batch_size = batch_size
@@ -161,13 +189,15 @@ class HCapsNet(nn.Module):
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
                                                  num_layers=num_layers_word, nhead=nhead_word,
-                                                 ulmfit_pretrained_path=ulmfit_pretrained_path
+                                                 ulmfit_pretrained_path=ulmfit_pretrained_path,
+                                                 dropout_factor_ulmfit=dropout_factor_ulmfit
                                                  )
         self.doc_encoder = AttentionSentEncoder(sent_encoder, sent_hidden, word_out,
                                                 bidirectional=bidirectional,
                                                 num_layers=num_layers_sen, nhead=nhead_sen)
 
-        self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+        self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps,
+                                            num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps)
         # self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
@@ -181,9 +211,6 @@ class HCapsNet(nn.Module):
         params.update(
             {
                 "model_name":"HCapsNet",
-                # "word_to_idx":self.word_to_idx,
-                # "label_to_idx":self.label_to_idx,
-                # "label_map":self.label_map,
                 "num_caps":self.caps_classifier.num_caps,
                 "dim_caps":self.caps_classifier.dim_caps,
                 "num_compressed_caps":self.caps_classifier.num_compressed_caps,
@@ -199,9 +226,6 @@ class HCapsNet(nn.Module):
     def forward(self, sents, sents_len, doc_lens, encoding):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
-
-        # if self.word_contextualizer != self.sent_contextualizer:
-        #     sen_encodings = sen_encodings.permute(1, 0, 2)
 
         sen_encodings = sen_encodings.split(split_size=doc_lens)
         # stack and pad
@@ -223,7 +247,7 @@ class HCapsNet(nn.Module):
 class HCapsNetMultiHeadAtt(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, nhead_doc = 25,
-                 ulmfit_pretrained_path=None, **kwargs):
+                 dropout_caps=0.2, ulmfit_pretrained_path=None, dropout_factor_ulmfit=1.0, **kwargs):
         super(HCapsNetMultiHeadAtt, self).__init__()
 
         # self.batch_size = batch_size
@@ -242,13 +266,15 @@ class HCapsNetMultiHeadAtt(nn.Module):
 
         self.sent_encoder = AttentionWordEncoder(word_encoder, num_tokens, embed_size, word_hidden,
                                                  bidirectional=bidirectional,
-                                                 num_layers=num_layers_word, nhead=nhead_word
+                                                 num_layers=num_layers_word, nhead=nhead_word,
+                                                 ulmfit_pretrained_path=ulmfit_pretrained_path,
+                                                 dropout_factor_ulmfit=dropout_factor_ulmfit,
                                                  )
         self.doc_encoder = GRUMultiHeadAtt(sent_hidden, word_out, nhead_doc=nhead_doc,
                                            bidirectional=bidirectional, dropout=dropout, aggregate_output=False)
 
-        self.caps_classifier = CapsNet_Text(sent_out, nhead_doc, num_classes,
-                                            dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps)
+        self.caps_classifier = CapsNet_Text(sent_out, nhead_doc, num_classes,dim_caps=dim_caps, num_caps=num_caps
+                                            , num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps)
         # self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
@@ -256,8 +282,25 @@ class HCapsNetMultiHeadAtt(nn.Module):
     def set_embedding(self, embed_table):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
+    def get_init_params(self):
+        # returns the parameters needed to initialize the model as is
+        params = self.sent_encoder.get_init_params()
+        params.update(self.doc_encoder.get_init_params())
 
-    def forward(self, sents, sents_len, doc_lens):
+        params.update(
+            {
+                "model_name":"HCapsNetMultiHeadAtt",
+                "nhead_doc":self.caps_classifier.in_channels,
+                "num_caps":self.caps_classifier.num_caps,
+                "dim_caps":self.caps_classifier.dim_caps,
+                "num_compressed_caps":self.caps_classifier.num_compressed_caps,
+            }
+        )
+
+        return params
+
+
+    def forward(self, sents, sents_len, doc_lens, encoding):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
@@ -276,6 +319,6 @@ class HCapsNetMultiHeadAtt(nn.Module):
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
+        rec_loss = self.caps_classifier.reconstruction_loss(encoding, poses)
 
-
-        return activations, word_attn_weight, sent_attn_weight
+        return activations, word_attn_weight, sent_attn_weight, rec_loss

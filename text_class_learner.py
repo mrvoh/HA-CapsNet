@@ -80,6 +80,7 @@ class MultiLabelTextClassifier:
 				 dropout = 0.1, K=5, verbose=True, **kwargs):
 
 		self.model_name = model_name
+		self.use_doc_encoding = 'caps' in model_name.lower()
 		self.model = None
 		self.word_to_idx = word_to_idx
 		self.label_to_idx = label_to_idx # Maps label_ids to index in model
@@ -177,7 +178,8 @@ class MultiLabelTextClassifier:
 		return self
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, use_glove, word_encoder = 'gru', sent_encoder = 'gru',
-				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, pos_weight=None, nhead_doc=5, ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, pos_weight=None, nhead_doc=5,
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -198,12 +200,12 @@ class MultiLabelTextClassifier:
 								  ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit)
 		elif self.model_name.lower() == 'hcapsnet':
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
+							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
 								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
-							 		word_encoder = word_encoder, sent_encoder = sent_encoder,
+							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
 									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit)
 
@@ -211,7 +213,9 @@ class MultiLabelTextClassifier:
 		if 'caps' in self.model_name.lower():
 			self.criterion = torch.nn.BCELoss()
 		else:
-			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(self.device), reduction='mean')
+			if pos_weight:
+				pos_weight = torch.tensor(pos_weight).to(self.device)
+			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 
 		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -329,10 +333,12 @@ class MultiLabelTextClassifier:
 			optimizer.zero_grad()
 
 			(sents, sents_len, doc_lens, target, doc_encoding) = batch
-			preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens, doc_encoding)
+			if self.use_doc_encoding: # Capsule based models
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens, doc_encoding)
+			else: # Other models
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens) # rec loss defaults to 0 for non-CapsNet models
 
 			loss = criterion(preds, target)
-			# if train_step > (eval_every * 0): #TODO: adapt this after test
 			loss += rec_loss
 			tr_loss += loss.item()
 
@@ -415,7 +421,10 @@ class MultiLabelTextClassifier:
 
 				(sents, sents_len, doc_lens, target, doc_encoding) = batch
 
-				preds = self.model(sents, sents_len, doc_lens, doc_encoding)[0]
+				if self.use_doc_encoding:  # Capsule based models
+					preds = self.model(sents, sents_len, doc_lens, doc_encoding)[0]
+				else:
+					preds = self.model(sents, sents_len, doc_lens)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets

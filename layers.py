@@ -298,7 +298,7 @@ class GRUMultiHeadAtt(nn.Module):
 		super(GRUMultiHeadAtt, self).__init__()
 
 		# self.batch_size = batch_size
-		self.sent_gru_hidden = sent_hidden
+		self.sent_hidden = sent_hidden
 		self.nhead_doc = nhead_doc
 		self.word_out = word_out
 		self.bidirectional = bidirectional
@@ -323,6 +323,18 @@ class GRUMultiHeadAtt(nn.Module):
 
 			self.out = nn.Parameter(torch.Tensor(nhead_doc, sent_gru_out))
 			self.out.data.normal_(0, 1 / np.sqrt(sent_gru_out))
+
+	def get_init_params(self):
+
+		params = {
+		'sent_hidden':self.sent_hidden,
+		'dropout':self.dropout,
+		'sent_encoder':'gru',
+		'nhead_doc':self.nhead_doc,
+		'bidirectional':self.bidirectional
+		}
+
+		return params
 
 	def forward(self, word_attention_vectors):
 
@@ -517,7 +529,7 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps):
+	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
@@ -537,6 +549,8 @@ class CapsNet_Text(nn.Module):
 		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,
 								  in_channels=num_caps, out_channels=num_caps)
 
+		#TODO: test dropout
+		self.drop = nn.Dropout(p=dropout_caps)
 
 		# DOC RECONSTRUCTOR
 		self.recon_error_lambda = 0.001 # factor to scale down reconstruction loss with
@@ -558,7 +572,10 @@ class CapsNet_Text(nn.Module):
 	def forward(self, doc):
 
 		poses_doc, activations_doc = self.primary_capsules_doc(doc)
+		poses_doc = self.drop(poses_doc)
 		poses, activations = self.flatten_capsules(poses_doc, activations_doc)
+
+		#TODO: test 1d vs 2d dropout as regularization
 		poses, activations = self.compression(poses, self.W_doc)
 		poses, activations = self.fc_capsules_doc_child(poses)
 		return poses, activations

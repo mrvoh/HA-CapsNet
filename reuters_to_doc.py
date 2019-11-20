@@ -6,10 +6,13 @@ import pickle
 from tqdm import tqdm
 import json
 
-def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seqs = 50, use_ulmfit=False):
+def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, use_ulmfit=False):
 
 	assert 0 < percentage_train <= 1, "The percentage of docs to be used for training should be between 0 and 1."
 
+	# Make sure the output dir exists
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
 	# retrieve data and create splits
 	train_full = [x for x in reuters.fileids() if 'train' in x]
 	shuffle(train_full)
@@ -30,7 +33,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, split_size_long_seq
 						 sentences=[' '.join(sen) for sen in reuters.sents(doc_id)],
 						 tags=reuters.categories(doc_id),
 						 restructure_doc=restructure_doc,
-						 split_size_long_seqs=split_size_long_seqs)
+						 split_size_long_seqs=max_seq_len)
 				for doc_id in tqdm(dataset)]
 
 		with open(os.path.join(out_dir, name+'.pkl'), 'wb') as f:

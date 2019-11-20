@@ -143,13 +143,15 @@ if __name__ == '__main__':
 	parser.add_argument("--num_compressed_caps",
 						type=int,
 						help="Number of compressed capsules")
-
+	parser.add_argument("--dropout_caps",
+						type=float,
+						help="Dropout to apply within CapsNet")
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
-						action='store_false',
+						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--create_doc_encodings",
-						action='store_false',
+						action='store_true',
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 
 	parser.add_argument("--raw_data_dir",
@@ -166,15 +168,15 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--restructure_docs",
-						action='store_false',
+						action='store_true',
 						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
 	parser.add_argument("--dataset_name",
-						default='sheet',
+						default='reuters',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
 	parser.add_argument("--percentage_train",
-						default=0.8,
+						default=0.9,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--percentage_dev",
@@ -313,12 +315,14 @@ if __name__ == '__main__':
 	# TODO: refactor data reading --> only from df?
 	if args.preprocess_all:
 		if args.dataset_name.lower() == 'reuters':
-			reuters_parse(args.write_data_dir, args.percentage_train, use_ulmfit=args.word_encoder.lower()=='ulmfit')
+			reuters_parse(args.write_data_dir, args.percentage_train, use_ulmfit=args.word_encoder.lower()=='ulmfit', restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
 		elif args.dataset_name.lower() == 'eur-lex57k':
 			label_to_idx_path, train_path, dev_path, test_path = \
-				eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations)
+				eur_lex_parse(args.raw_data_dir, args.write_data_dir, args.dataset_name, args.num_tags, args.num_backtranslations,
+							  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
 		elif args.dataset_name.lower() == 'sheet':
-			parse_sheet(args.raw_data_dir, args.write_data_dir, args.percentage_dev, 1.-args.percentage_train-args.percentage_dev, use_ulmfit=args.word_encoder.lower()=='ulmfit')
+			parse_sheet(args.raw_data_dir, args.write_data_dir, args.percentage_dev, 1.-args.percentage_train-args.percentage_dev, use_ulmfit=args.word_encoder.lower()=='ulmfit',
+						restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
 		else:
 			raise AssertionError('Currently only Reuters, sheets and EUR-Lex57k are supported datasets for preprocessing.')
 
@@ -390,6 +394,9 @@ if __name__ == '__main__':
 		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,
 																		unk=unk, pad=pad)
 		pos_weight = [v/len(train_dataset) for k,v in tag_counter_train.items()]
+		# Fix for when not all labels are present in train set
+		if len(pos_weight) != len(label_to_idx):
+			pos_weight = None
 		dataloader_train = get_data_loader(train_dataset, args.train_batch_size, True, use_rnn)
 
 		# Save word_mapping

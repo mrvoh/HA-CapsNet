@@ -50,9 +50,9 @@ def docs_to_sheet(in_path, out_path, label_to_idx_path, use_excel = False, delim
 
 
 
-def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure_doc=True, split_size_long_seqs=50,
-		  	use_ulmfit=False, delimiter=',', encoding='utf-8', use_excel=True, text_cols='text', target_prefix='topic_',
-			binary_class=True, split_val='_'):
+def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure_doc=True, max_seq_len=50,
+				  use_ulmfit=False, delimiter=',', encoding='utf-8', use_excel=True, text_cols='text', target_prefix='topic_',
+				  binary_class=True, split_val='_'):
 	assert 0 < dev_percentage < 1, "the percentage of data to be used for dev should be between 0 and 1."
 	assert 0 < test_percentage < 1, "the percentage of data to be used for dev should be between 0 and 1."
 	assert dev_percentage + test_percentage < 1, "the percentage used for dev and test should be less than 1."
@@ -105,7 +105,7 @@ def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure
 						 filename='test',
 						 tags=[idx_to_label[int(t)] for t in target.split(split_val) if t != ''],
 						 restructure_doc=restructure_doc,
-						 split_size_long_seqs=split_size_long_seqs)
+						 split_size_long_seqs=max_seq_len)
 				for text, target in tqdm(dset)]
 
 		with open(os.path.join(out_dir, name + '.pkl'), 'wb') as f:
