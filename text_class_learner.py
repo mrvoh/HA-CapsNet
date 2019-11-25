@@ -437,9 +437,9 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		acc = accuracy(y_true, y_pred, False)
+		hamming, emr, f1 = accuracy(y_true, y_pred, False)
 
-		self.logger.info("Accuracy: {:1.3f}".format(acc))
+		self.logger.info("Hamming loss {:1.3f} | Exact Match Ratio {:1.3f} | F1 {:1.3f}".format(hamming, emr, f1))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		for i in range(1, K + 1):

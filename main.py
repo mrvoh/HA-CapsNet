@@ -127,7 +127,7 @@ if __name__ == '__main__':
 						help="The path from where the pretrained language model is to be retrieved.")
 	parser.add_argument("--dropout_factor",
 						type=float,
-						help="Multiplier for standard dropout values in ULMFiT ")
+						help="Multiplier for standard dropout values in ULMFiT.")
 
 		# caps net options
 	parser.add_argument("--dim_caps",
@@ -152,7 +152,7 @@ if __name__ == '__main__':
 						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
 	parser.add_argument("--create_doc_encodings",
 						action='store_true',
-						help="Whether pre-process the dataset from a set of *.json files to a loadable dataset.")
+						help="Whether to enrich the documents with an encoding for reconstruction.")
 
 	parser.add_argument("--raw_data_dir",
 						default=r'C:\Users\nvanderheijden\Documents\Regminer\regminer-topic-modelling\modeling\train_filtered.xlsx',
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--restructure_docs",
-						action='store_true',
+						action='store_false',
 						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
 	parser.add_argument("--dataset_name",
 						default='reuters',
@@ -176,11 +176,11 @@ if __name__ == '__main__':
 						required=False,
 						help="Name of the dataset.")
 	parser.add_argument("--percentage_train",
-						default=0.9,
+						default=1.0,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--percentage_dev",
-						default=0.1,
+						default=0.0,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",

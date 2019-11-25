@@ -2,6 +2,7 @@
 # License: BSD 3 clause
 
 import numpy as np
+from sklearn.metrics import accuracy_score, f1_score, hamming_loss
 
 def accuracy(y_true, y_pred, convert_logits):
 
@@ -21,11 +22,19 @@ def accuracy(y_true, y_pred, convert_logits):
 	# accuracy = n_correct / n_rows
 	# accuracy = np.sum(y_pred == y_true) / y_true.size
 
-	n_correct = np.sum((y_true == y_pred) & (y_true == 1))
-	n_total = np.sum(y_true == 1) + np.sum(y_pred == 1)
-	accuracy = 2*n_correct / n_total
+	# n_correct = np.sum((y_true == y_pred) & (y_true == 1))
+	# n_total = np.sum(y_true == 1) + np.sum(y_pred == 1)
+	# accuracy = 2*n_correct / n_total
 
-	return accuracy
+	hamming = hamming_loss(y_true, y_pred)
+	emr = accuracy_score(y_true, y_pred, normalize=True)
+	f1 = f1_score(y_true, y_pred, average='micro')
+
+	print(
+		'Native accuracy: {}, Sklearn accuracy: {}, Sklearn F1: {}'.format(accuracy, emr, f1)
+	)
+
+	return hamming, emr, f1
 
 
 
