@@ -14,12 +14,12 @@ class FastTextLearner:
         self.model = None
 
     def train(self, train_path, dev_path=None, test_path=None, save_path = None, optimize_time=None, binary_classification=True,
-              lr=0.2, epoch=100,embed_size=300, K=5):
+              lr=0.1, epoch=1000,embed_size=300, K=5):
         # optimize_time given in seconds
 
         # train model
         if not optimize_time:
-            self.model = fasttext.train_supervised(train_path, loss='hs' if binary_classification else 'ova', lr=lr, epoch=epoch, dim=embed_size)
+            self.model = fasttext.train_supervised(train_path, loss='ova' if binary_classification else 'hs', lr=lr, epoch=epoch, dim=embed_size)
         else: # optimize params..
             assert dev_path, "When FastText is optimized, a development set must also be given"
             self.model = fasttext.train_supervised(train_path, autotune_validation_file=dev_path, autotune_duration=optimize_time, loss='hs' if binary_classification else 'ova')
