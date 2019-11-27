@@ -1,20 +1,14 @@
-import torch
 import os
-import pickle
-import json
 # from torchnlp.word_to_vector import FastText
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
-import gc
 from torchnlp.encoders.text import stack_and_pad_tensors
-from scipy.special import expit
 
 from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt
-from data_utils import process_dataset, get_data_loader, get_embedding, _convert_word_to_idx
-from radam import RAdam
-from logger import get_logger, Progbar
-from metrics import *
+from data_utils.data_utils import get_embedding, _convert_word_to_idx
+from utils.radam import RAdam
+from utils.logger import get_logger, Progbar
+from utils.metrics import *
 from document_model import Document
 import fasttext
 from torchnlp.word_to_vector.pretrained_word_vectors import _PretrainedWordVectors
@@ -315,9 +309,15 @@ class MultiLabelTextClassifier:
 		# Train epoch
 		best_score, best_loss, train_step = (0,0,0)
 
+		to_freeze = 3 # total nr of layers to freeze in ULMFiT
+
 		for epoch in range(num_epochs):
 			torch.cuda.empty_cache()
 			self.logger.info("Epoch: {}".format(epoch))
+			if (self.word_encoder.lower() == 'ulmfit') and (epoch <= to_freeze):
+				self.model.sent_encoder.word_encoder.freeze_to(epoch)
+
+			# continue
 			best_score, best_loss, train_step = self._train_epoch(dataloader_train, dataloader_dev, self.optimizer,
 																  self.criterion, eval_every, train_step, best_score,
 																  best_loss)
@@ -437,9 +437,9 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1 = accuracy(y_true, y_pred, False)
+		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False)
 
-		self.logger.info("Hamming loss {:1.3f} | Exact Match Ratio {:1.3f} | F1 {:1.3f}".format(hamming, emr, f1))
+		self.logger.info("Hamming loss {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		for i in range(1, K + 1):

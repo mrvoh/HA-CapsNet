@@ -7,7 +7,6 @@ TODO: Data pre-processing
 import os
 import pickle
 import json
-import argparse
 import configargparse
 import gc
 import torch
@@ -15,13 +14,21 @@ import tqdm
 # import cProfile, pstats, io
 # from pstats import SortKey
 
-from data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
+from data_utils.data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
 from text_class_learner import MultiLabelTextClassifier
-from eur_lex57k_to_doc import parse as eur_lex_parse
-from reuters_to_doc import parse as reuters_parse
-from csv_to_documents import sheet_to_docs as parse_sheet
+from data_utils.eur_lex57k_to_doc import parse as eur_lex_parse
+from data_utils.reuters_to_doc import parse as reuters_parse
+from data_utils.csv_to_documents import sheet_to_docs as parse_sheet
 from model import FastTextLearner
 from layers import ULMFiTEncoder
+
+
+# Mute Sklearn warnings
+def warn(*args, **kwargs):
+    pass
+
+import warnings
+warnings.warn = warn
 
 
 if __name__ == '__main__':
@@ -408,8 +415,7 @@ if __name__ == '__main__':
 		del train_docs
 
 
-
-		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,
+		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=None,
 																	unk=unk, pad=pad)
 		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, False, use_rnn)
 		# Free some memory
@@ -456,7 +462,7 @@ if __name__ == '__main__':
 		# get dataloader
 		test_dataset, word_to_idx, _ = process_dataset(test_docs, word_to_idx=word_to_idx,
 																		label_to_idx=label_to_idx,
-																		min_freq_word=args.min_freq_word,
+																		min_freq_word=None,
 													   					unk=unk, pad = pad)
 
 		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn)

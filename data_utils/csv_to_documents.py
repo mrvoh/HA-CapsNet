@@ -1,7 +1,6 @@
 import pandas as pd
 from skmultilearn.model_selection import iterative_train_test_split
 from document_model import Document, TextPreprocessor
-from random import shuffle
 import os
 import pickle
 from tqdm import tqdm

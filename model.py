@@ -199,7 +199,7 @@ class HCapsNet(nn.Module):
         self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps,
                                             num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps)
         # self.out = nn.Linear(sent_out, num_classes)
-        self.bn = nn.BatchNorm1d(sent_out)
+        # self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
 
 
@@ -233,8 +233,8 @@ class HCapsNet(nn.Module):
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
-        doc_encoding = self.bn(doc_encoding).unsqueeze(1) #self.drop()
-
+        # doc_encoding = self.bn(doc_encoding).unsqueeze(1) #self.drop()
+        doc_encoding = doc_encoding.unsqueeze(1)
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
