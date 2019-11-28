@@ -394,8 +394,6 @@ if __name__ == '__main__':
 		with open(dev_path, 'rb') as f:
 			dev_docs = pickle.load(f)
 
-
-
 		# encoder.to(torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'))
 		# get dataloader
 		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx, label_to_idx=label_to_idx, min_freq_word=args.min_freq_word,

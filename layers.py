@@ -544,7 +544,7 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps):
+	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps, lambda_reg_caps):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
@@ -568,7 +568,7 @@ class CapsNet_Text(nn.Module):
 		self.drop = nn.Dropout2d(p=dropout_caps)
 
 		# DOC RECONSTRUCTOR
-		self.recon_error_lambda = 0.001 # factor to scale down reconstruction loss with
+		self.recon_error_lambda = lambda_reg_caps # factor to scale down reconstruction loss with
 		self.rescale = nn.Parameter(torch.Tensor([7]))
 		reconstruction_size = 800 #TODO: change
 		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
