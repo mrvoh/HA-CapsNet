@@ -12,7 +12,7 @@ from utils.metrics import *
 from document_model import Document
 import fasttext
 from torchnlp.word_to_vector.pretrained_word_vectors import _PretrainedWordVectors
-from flair.embeddings import WordEmbeddings
+# from flair.embeddings import WordEmbeddings
 
 try:
 	from apex import amp
@@ -124,24 +124,6 @@ class MultiLabelTextClassifier:
 		params["label_to_idx"] = self.label_to_idx
 		params["label_map"] = self.label_map
 		params["criterion"] = self.criterion
-		# params = {
-		# 	"model_name":self.model_name,
-		# 	"word_to_idx":self.word_to_idx,
-		# 	"label_to_idx":self.label_to_idx,
-		# 	"label_map":self.label_map,
-		# 	"embed_size":self.embed_size,
-		# 	"word_hidden":self.word_hidden,
-		# 	"sent_hidden":self.sent_hidden,
-		# 	"nhead_doc":self.nhead_doc,
-		# 	"dropout":self.dropout,
-		# 	"word_encoder":self.word_encoder,
-		# 	"sent_encoder":self.sent_encoder,
-		# 	"optimizer":self.optimizer,
-		# 	"criterion":self.criterion,
-		# 	"pretrained_path":self.pretrained_path,
-		# 	"ulmfit_pretrained_path":self.ulmfit_pretrained_path,
-		# 	"state_dict":self.model.state_dict()
-		# }
 
 		torch.save(params, path)
 
@@ -363,26 +345,28 @@ class MultiLabelTextClassifier:
 
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
 		# Eval dev
-		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev = self.eval_dataset(dataloader_dev, K=self.K)
+		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
+			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K)
 
 		# Eval Train
-		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr = self.eval_dataset(dataloader_train, K=self.K,
-																			max_samples=len(dataloader_dev))
+		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
+			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K,
+																	max_samples=len(dataloader_dev))
 
 		# Save model if best
-		if best_score < rp_k_dev:
-			best_score = rp_k_dev
+		if best_score < f1_micro_dev:
+			best_score = f1_micro_dev
 
 			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
 			# torch.save(self.model.state_dict(),
 			# 		   os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev, self.K, rp_k_dev)))
 			self.logger.info("Saved model with new best score: {0:.3f}".format(rp_k_dev))
-		elif best_loss > avg_loss_dev:
-			best_loss = avg_loss_dev
-
-			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
-
-			self.logger.info("Saved model with new best loss: {0:.5f}".format(avg_loss_dev))
+		# elif best_loss > avg_loss_dev:
+		# 	best_loss = avg_loss_dev
+		#
+		# 	self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
+		#
+		# 	self.logger.info("Saved model with new best loss: {0:.5f}".format(avg_loss_dev))
 
 		# Write to Tensorboard
 		self.writer.add_scalars("Loss",
@@ -458,5 +442,5 @@ class MultiLabelTextClassifier:
 			self.logger.info(template.format(i, f1_k, r_k, p_k, rp_k, ndcg_k))
 		self.logger.info('----------------------------------------------------')
 
-		return r_k, p_k, rp_k, ndcg_k, avg_loss
+		return r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro
 

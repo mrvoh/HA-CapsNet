@@ -46,6 +46,8 @@ def docs_to_sheet(in_path, out_path, label_to_idx_path, use_excel = False, delim
 	else:
 		df.to_csv(out_path, sep=delimiter, encoding=encoding)
 
+	return df
+
 
 
 

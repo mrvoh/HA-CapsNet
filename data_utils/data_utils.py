@@ -16,7 +16,7 @@ import operator
 import pickle
 from collections import Counter
 import fasttext
-from flair.data import Sentence
+# from flair.data import Sentence
 
 # UNK = '<UNK>'
 # PAD = '<PAD>'
