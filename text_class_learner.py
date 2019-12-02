@@ -1,6 +1,7 @@
 import os
 # from torchnlp.word_to_vector import FastText
 import torch
+from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchnlp.encoders.text import stack_and_pad_tensors
 
@@ -12,7 +13,6 @@ from utils.metrics import *
 from document_model import Document
 import fasttext
 from torchnlp.word_to_vector.pretrained_word_vectors import _PretrainedWordVectors
-# from flair.embeddings import WordEmbeddings
 
 try:
 	from apex import amp
@@ -148,6 +148,9 @@ class MultiLabelTextClassifier:
 			model = HCapsNetMultiHeadAtt(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
 		model.load_state_dict(params['state_dict'])
+		if torch.cuda.device_count() > 1:
+			print("Let's use", torch.cuda.device_count(), "GPUs!")
+			model = nn.DataParallel(model)
 		model.to(self.device)
 		self.model = model
 
@@ -201,10 +204,12 @@ class MultiLabelTextClassifier:
 		if word_encoder.lower() != 'ulmfit':
 			vectors = fasttext.load_model(vector_path)
 
-			glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
-			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
+			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim)
 			self.model.set_embedding(embed_table)
 
+		if torch.cuda.device_count() > 1:
+			print("Let's use", torch.cuda.device_count(), "GPUs!")
+			self.model = nn.DataParallel(self.model)
 		self.model.to(self.device)
 
 

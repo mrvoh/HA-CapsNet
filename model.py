@@ -179,6 +179,7 @@ class HCapsNet(nn.Module):
         self.word_encoder = word_encoder
         self.sent_encoder = sent_encoder
         self.dropout = dropout
+        self.lambda_reg_caps = lambda_reg_caps
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
@@ -259,6 +260,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
         self.bidirectional = bidirectional
         self.word_contextualizer = word_encoder
         self.sent_contextualizer = sent_encoder
+        self.lambda_reg_caps = lambda_reg_caps
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value

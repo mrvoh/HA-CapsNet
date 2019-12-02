@@ -1,12 +1,8 @@
 from hyperopt import hp, tpe, fmin, Trials, STATUS_OK
 import numpy as np
-import json
 import pickle
-import os
 from data_utils.csv_to_documents import docs_to_sheet
 from skmultilearn.model_selection import IterativeStratification
-import configargparse
-from utils.argparser import get_parser
 import configparser
 import gc
 from collections import OrderedDict
@@ -56,10 +52,7 @@ def set_params(params, config_path):
 def objective(params):
 	# return {'loss': 1, 'status': STATUS_OK}
 	# objective fn to be minimized
-	global data_path, label_to_idx_path, K, config_path
-	set_params(params, config_path)
-
-	# read in data
+	global data_path, label_to_idx_path, K, config_path, trials
 
 	# get stratisfied split
 	df = docs_to_sheet(data_path, 'tmp.csv', label_to_idx_path)
@@ -82,6 +75,7 @@ def objective(params):
 	params['train_path'] = tmp_tr_path
 	params['dev_path'] = tmp_dev_path
 	params['test_path'] = tmp_dev_path
+	set_params(params, config_path)
 
 	for train_idx, dev_idx in k_fold.split(X,y):
 		# get split
@@ -101,6 +95,9 @@ def objective(params):
 		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval()
 		scores.append(f1_micro)
 
+	# save trials object for safety
+	with open('trials_tmp.pkl', 'wb') as f:
+		pickle.dump(trials, f)
 
 
 	return {'loss':1-np.mean(scores), 'status':STATUS_OK}

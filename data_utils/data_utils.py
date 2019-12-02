@@ -16,7 +16,6 @@ import operator
 import pickle
 from collections import Counter
 import fasttext
-# from flair.data import Sentence
 
 # UNK = '<UNK>'
 # PAD = '<PAD>'
@@ -50,13 +49,10 @@ def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 3
 
 
 
-def get_embedding(vecs, word_to_idx, embed_size, glove = None):
+def get_embedding(vecs, word_to_idx, embed_size):
+	# Retrieves relevant word vectors and returns as matrix
 	embed_table = [vecs[key] if key in word_to_idx.keys() else np.random.rand(embed_size) for key in sorted(word_to_idx.keys())]
-	if glove:
-		glove_emb = [Sentence(key) for key in sorted(word_to_idx.keys())]
-		[glove.embed(k) for k in glove_emb]
-		glove_emb = [tok.embedding for tok in glove_emb]
-		embed_table = [np.concatenate([x1,x2]) for x1, x2 in zip(embed_table, glove_emb)]
+
 	embed_table = np.array(embed_table, dtype=float)
 	return embed_table
 
