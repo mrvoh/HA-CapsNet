@@ -1,7 +1,6 @@
 import pandas as pd
 from skmultilearn.model_selection import iterative_train_test_split
 from document_model import Document, TextPreprocessor
-from random import shuffle
 import os
 import pickle
 from tqdm import tqdm
@@ -46,6 +45,8 @@ def docs_to_sheet(in_path, out_path, label_to_idx_path, use_excel = False, delim
 		df.to_excel(out_path, encoding=encoding)
 	else:
 		df.to_csv(out_path, sep=delimiter, encoding=encoding)
+
+	return df
 
 
 

@@ -1,24 +1,18 @@
-import torch
 import os
-import pickle
-import json
 # from torchnlp.word_to_vector import FastText
 import torch
+from torch import nn
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
-import gc
 from torchnlp.encoders.text import stack_and_pad_tensors
-from scipy.special import expit
 
 from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt
-from data_utils import process_dataset, get_data_loader, get_embedding, _convert_word_to_idx
-from radam import RAdam
-from logger import get_logger, Progbar
-from metrics import *
+from data_utils.data_utils import get_embedding, _convert_word_to_idx
+from utils.radam import RAdam
+from utils.logger import get_logger, Progbar
+from utils.metrics import *
 from document_model import Document
 import fasttext
 from torchnlp.word_to_vector.pretrained_word_vectors import _PretrainedWordVectors
-from flair.embeddings import WordEmbeddings
 
 try:
 	from apex import amp
@@ -130,24 +124,6 @@ class MultiLabelTextClassifier:
 		params["label_to_idx"] = self.label_to_idx
 		params["label_map"] = self.label_map
 		params["criterion"] = self.criterion
-		# params = {
-		# 	"model_name":self.model_name,
-		# 	"word_to_idx":self.word_to_idx,
-		# 	"label_to_idx":self.label_to_idx,
-		# 	"label_map":self.label_map,
-		# 	"embed_size":self.embed_size,
-		# 	"word_hidden":self.word_hidden,
-		# 	"sent_hidden":self.sent_hidden,
-		# 	"nhead_doc":self.nhead_doc,
-		# 	"dropout":self.dropout,
-		# 	"word_encoder":self.word_encoder,
-		# 	"sent_encoder":self.sent_encoder,
-		# 	"optimizer":self.optimizer,
-		# 	"criterion":self.criterion,
-		# 	"pretrained_path":self.pretrained_path,
-		# 	"ulmfit_pretrained_path":self.ulmfit_pretrained_path,
-		# 	"state_dict":self.model.state_dict()
-		# }
 
 		torch.save(params, path)
 
@@ -172,13 +148,16 @@ class MultiLabelTextClassifier:
 			model = HCapsNetMultiHeadAtt(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
 		model.load_state_dict(params['state_dict'])
+		if torch.cuda.device_count() > 1:
+			print("Let's use", torch.cuda.device_count(), "GPUs!")
+			model = nn.DataParallel(model)
 		model.to(self.device)
 		self.model = model
 
 		return self
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, use_glove, word_encoder = 'gru', sent_encoder = 'gru',
-				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, pos_weight=None, nhead_doc=5,
+				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
 				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
 
 		self.embed_size = embed_dim
@@ -202,12 +181,14 @@ class MultiLabelTextClassifier:
 			self.model = HCapsNet(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
-								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit)
+								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit,
+								  	lambda_reg_caps = lambda_reg_caps)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
-									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit)
+									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit,
+									lambda_reg_caps = lambda_reg_caps)
 
 		# Initialize training attributes
 		if 'caps' in self.model_name.lower():
@@ -223,10 +204,12 @@ class MultiLabelTextClassifier:
 		if word_encoder.lower() != 'ulmfit':
 			vectors = fasttext.load_model(vector_path)
 
-			glove = WordEmbeddings('glove') if use_glove else None # Extra GloVe embeddings
-			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim, glove=glove)
+			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim)
 			self.model.set_embedding(embed_table)
 
+		if torch.cuda.device_count() > 1:
+			print("Let's use", torch.cuda.device_count(), "GPUs!")
+			self.model = nn.DataParallel(self.model)
 		self.model.to(self.device)
 
 
@@ -315,9 +298,15 @@ class MultiLabelTextClassifier:
 		# Train epoch
 		best_score, best_loss, train_step = (0,0,0)
 
+		to_freeze = 3 # total nr of layers to freeze in ULMFiT
+
 		for epoch in range(num_epochs):
 			torch.cuda.empty_cache()
 			self.logger.info("Epoch: {}".format(epoch))
+			if (self.word_encoder.lower() == 'ulmfit') and (epoch <= to_freeze):
+				self.model.sent_encoder.word_encoder.freeze_to(epoch)
+
+			# continue
 			best_score, best_loss, train_step = self._train_epoch(dataloader_train, dataloader_dev, self.optimizer,
 																  self.criterion, eval_every, train_step, best_score,
 																  best_loss)
@@ -361,26 +350,28 @@ class MultiLabelTextClassifier:
 
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
 		# Eval dev
-		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev = self.eval_dataset(dataloader_dev, K=self.K)
+		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
+			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K)
 
 		# Eval Train
-		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr = self.eval_dataset(dataloader_train, K=self.K,
-																			max_samples=len(dataloader_dev))
+		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
+			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K,
+																	max_samples=len(dataloader_dev))
 
 		# Save model if best
-		if best_score < rp_k_dev:
-			best_score = rp_k_dev
+		if best_score < f1_micro_dev:
+			best_score = f1_micro_dev
 
 			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
 			# torch.save(self.model.state_dict(),
 			# 		   os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev, self.K, rp_k_dev)))
 			self.logger.info("Saved model with new best score: {0:.3f}".format(rp_k_dev))
-		elif best_loss > avg_loss_dev:
-			best_loss = avg_loss_dev
-
-			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
-
-			self.logger.info("Saved model with new best loss: {0:.5f}".format(avg_loss_dev))
+		# elif best_loss > avg_loss_dev:
+		# 	best_loss = avg_loss_dev
+		#
+		# 	self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
+		#
+		# 	self.logger.info("Saved model with new best loss: {0:.5f}".format(avg_loss_dev))
 
 		# Write to Tensorboard
 		self.writer.add_scalars("Loss",
@@ -437,9 +428,9 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1 = accuracy(y_true, y_pred, False)
+		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False)
 
-		self.logger.info("Hamming loss {:1.3f} | Exact Match Ratio {:1.3f} | F1 {:1.3f}".format(hamming, emr, f1))
+		self.logger.info("Hamming loss {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		for i in range(1, K + 1):
@@ -456,5 +447,5 @@ class MultiLabelTextClassifier:
 			self.logger.info(template.format(i, f1_k, r_k, p_k, rp_k, ndcg_k))
 		self.logger.info('----------------------------------------------------')
 
-		return r_k, p_k, rp_k, ndcg_k, avg_loss
+		return r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro
 

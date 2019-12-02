@@ -166,7 +166,7 @@ class HGRULWAN(nn.Module):
 class HCapsNet(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100,
-                 dropout_caps = 0.2, ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0,**kwargs):
+                 dropout_caps = 0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0,**kwargs):
         super(HCapsNet, self).__init__()
 
         # self.batch_size = batch_size
@@ -179,6 +179,7 @@ class HCapsNet(nn.Module):
         self.word_encoder = word_encoder
         self.sent_encoder = sent_encoder
         self.dropout = dropout
+        self.lambda_reg_caps = lambda_reg_caps
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
@@ -197,9 +198,10 @@ class HCapsNet(nn.Module):
                                                 num_layers=num_layers_sen, nhead=nhead_sen)
 
         self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps,
-                                            num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps)
+                                            num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
+                                            lambda_reg_caps = lambda_reg_caps)
         # self.out = nn.Linear(sent_out, num_classes)
-        self.bn = nn.BatchNorm1d(sent_out)
+        # self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
 
 
@@ -213,6 +215,7 @@ class HCapsNet(nn.Module):
                 "model_name":"HCapsNet",
                 "num_caps":self.caps_classifier.num_caps,
                 "dim_caps":self.caps_classifier.dim_caps,
+                "lambda_reg_caps":self.lambda_reg_caps,
                 "num_compressed_caps":self.caps_classifier.num_compressed_caps,
             }
         )
@@ -233,8 +236,8 @@ class HCapsNet(nn.Module):
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
-        doc_encoding = self.bn(doc_encoding).unsqueeze(1) #self.drop()
-
+        # doc_encoding = self.bn(doc_encoding).unsqueeze(1) #self.drop()
+        doc_encoding = doc_encoding.unsqueeze(1)
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
@@ -247,7 +250,7 @@ class HCapsNet(nn.Module):
 class HCapsNetMultiHeadAtt(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, nhead_doc = 25,
-                 dropout_caps=0.2, ulmfit_pretrained_path=None, dropout_factor_ulmfit=1.0, **kwargs):
+                 dropout_caps=0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit=1.0, **kwargs):
         super(HCapsNetMultiHeadAtt, self).__init__()
 
         # self.batch_size = batch_size
@@ -257,6 +260,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
         self.bidirectional = bidirectional
         self.word_contextualizer = word_encoder
         self.sent_contextualizer = sent_encoder
+        self.lambda_reg_caps = lambda_reg_caps
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
@@ -274,7 +278,8 @@ class HCapsNetMultiHeadAtt(nn.Module):
                                            bidirectional=bidirectional, dropout=dropout, aggregate_output=False)
 
         self.caps_classifier = CapsNet_Text(sent_out, nhead_doc, num_classes,dim_caps=dim_caps, num_caps=num_caps
-                                            , num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps)
+                                            , num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
+                                            lambda_reg_caps = lambda_reg_caps)
         # self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
@@ -292,6 +297,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
                 "model_name":"HCapsNetMultiHeadAtt",
                 "nhead_doc":self.caps_classifier.in_channels,
                 "num_caps":self.caps_classifier.num_caps,
+                "lambda_reg_caps":self.lambda_reg_caps,
                 "dim_caps":self.caps_classifier.dim_caps,
                 "num_compressed_caps":self.caps_classifier.num_compressed_caps,
             }

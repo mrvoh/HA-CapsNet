@@ -3,6 +3,28 @@
 
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
+from sklearn.utils.multiclass import type_of_target
+
+def hamming_score(y_true, y_pred, normalize=True, sample_weight=None):
+    '''
+    Compute the Hamming score (a.k.a. label-based accuracy) for the multi-label case
+    http://stackoverflow.com/q/32239577/395857
+    '''
+    acc_list = []
+    for i in range(y_true.shape[0]):
+        set_true = set( np.where(y_true[i])[0] )
+        set_pred = set( np.where(y_pred[i])[0] )
+        #print('\nset_true: {0}'.format(set_true))
+        #print('set_pred: {0}'.format(set_pred))
+        tmp_a = None
+        if len(set_true) == 0 and len(set_pred) == 0:
+            tmp_a = 1
+        else:
+            tmp_a = len(set_true.intersection(set_pred))/\
+                    float( len(set_true.union(set_pred)) )
+        #print('tmp_a: {0}'.format(tmp_a))
+        acc_list.append(tmp_a)
+    return np.mean(acc_list)
 
 def accuracy(y_true, y_pred, convert_logits):
 
@@ -26,15 +48,12 @@ def accuracy(y_true, y_pred, convert_logits):
 	# n_total = np.sum(y_true == 1) + np.sum(y_pred == 1)
 	# accuracy = 2*n_correct / n_total
 
-	hamming = hamming_loss(y_true, y_pred)
+	hamming = hamming_score(y_true, y_pred)
 	emr = accuracy_score(y_true, y_pred, normalize=True)
-	f1 = f1_score(y_true, y_pred, average='micro')
+	f1_micro = f1_score(y_true, y_pred, average='micro')
+	f1_macro = f1_score(y_true, y_pred, average='macro')
 
-	print(
-		'Native accuracy: {}, Sklearn accuracy: {}, Sklearn F1: {}'.format(accuracy, emr, f1)
-	)
-
-	return hamming, emr, f1
+	return hamming, emr, f1_micro, f1_macro
 
 
 

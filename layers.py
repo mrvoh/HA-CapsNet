@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 import copy
 # from transformer import Encoder as TransformerEncoder
-from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
+# from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
 from fastai.text import *
 # from fastai
@@ -79,13 +79,29 @@ class ULMFiTEncoder(nn.Module):
 		config['n_hid'] = 1150
 		#TODO: save config in state_dict when finetuning
 		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
-		# lm.load_pretrained(pretrained_path)
+
 		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
-		self.bn = nn.BatchNorm1d(config['emb_sz'])
-		self.ulmfit = lm
+		# self.bn = nn.BatchNorm1d(config['emb_sz'])
+		self.ln = nn.LayerNorm(config['emb_sz'])
 		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
 
 		self.ulmfit = next(lm.modules())[0]
+
+	def freeze_to(self, l):
+		# when l < 0 everything will be unfrozen
+		stop_map = {
+			0:10, # lstm layer 3
+			1:8, # lstm layer 2
+			2:6, # lstm layer 1
+			3:-1 # all
+		}
+
+		for i, mod in enumerate(self.ulmfit.modules()):
+			for param in mod.parameters():
+				try: # hacky way to work around FastAI modules
+					param.requires_grad = i > stop_map[l]
+				except:
+					continue
 
 	def encode(self, x):
 		# Encodes a str as a concatenation of the mean and max pooling of the final hidden state over the whole sequence
@@ -93,7 +109,7 @@ class ULMFiTEncoder(nn.Module):
 		self.ulmfit.reset() # since an internal state is kept
 		h, c = self.ulmfit(x)
 
-		mean_pool = h[-1].mean(dim=1) #TODO: check dim
+		mean_pool = h[-1].mean(dim=1)
 		max_pool, _ = h[-1].max(dim=1)
 
 		x = torch.cat([mean_pool, max_pool], dim=1).squeeze()
@@ -106,9 +122,8 @@ class ULMFiTEncoder(nn.Module):
 		h, c = self.ulmfit(x)
 
 		x = h[-1]#[:,-1,:] # final hidden state
-		x = self.bn(x.permute(0,2,1)).permute(0,2,1)
-
-		# x_max = self.bn(x_max)
+		x = self.ln(x)
+		# x = self.bn(x.permute(0,2,1)).permute(0,2,1)
 		return x
 
 class AttentionWordEncoder(nn.Module):
@@ -529,7 +544,7 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps):
+	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps, lambda_reg_caps):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
@@ -550,16 +565,16 @@ class CapsNet_Text(nn.Module):
 								  in_channels=num_caps, out_channels=num_caps)
 
 		#TODO: test dropout
-		self.drop = nn.Dropout(p=dropout_caps)
+		self.drop = nn.Dropout2d(p=dropout_caps)
 
 		# DOC RECONSTRUCTOR
-		self.recon_error_lambda = 0.001 # factor to scale down reconstruction loss with
+		self.recon_error_lambda = lambda_reg_caps # factor to scale down reconstruction loss with
 		self.rescale = nn.Parameter(torch.Tensor([7]))
 		reconstruction_size = 800 #TODO: change
 		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
-		self.bn = nn.BatchNorm2d(num_classes)
+		# self.bn = nn.BatchNorm2d(num_classes)
 
 		self.relu = nn.ReLU(inplace=True)
 		self.sigmoid = nn.Sigmoid()
@@ -572,9 +587,9 @@ class CapsNet_Text(nn.Module):
 	def forward(self, doc):
 
 		poses_doc, activations_doc = self.primary_capsules_doc(doc)
-		poses_doc = self.drop(poses_doc)
-		poses, activations = self.flatten_capsules(poses_doc, activations_doc)
 
+		poses, activations = self.flatten_capsules(poses_doc, activations_doc)
+		poses = self.drop(poses)
 		#TODO: test 1d vs 2d dropout as regularization
 		poses, activations = self.compression(poses, self.W_doc)
 		poses, activations = self.fc_capsules_doc_child(poses)
@@ -597,7 +612,7 @@ class CapsNet_Text(nn.Module):
 
 	def reconstruction_loss(self, doc_enc, input, size_average=True):
 		# Get the lengths of capsule outputs.
-		input = self.bn(input)
+		# input = self.bn(input)
 		v_mag = torch.sqrt((input ** 2).sum(dim=2))
 
 		# Get index of longest capsule output.

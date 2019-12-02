@@ -1,25 +1,21 @@
 # from torchnlp.word_to_vector import FastText
-from urllib.request import urlopen
 from torchnlp.datasets import Dataset
 from torchnlp.samplers import BucketBatchSampler
-from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
+from torchnlp.encoders.text import stack_and_pad_tensors
 from torch.utils.data import DataLoader
 import torch
-import os
 # import nltk
 import numpy as np
-import json
 from collections import OrderedDict
 import glob
 import os
 import tqdm
 from collections import defaultdict
-from json_loader import JSONLoader
+from data_utils.json_loader import JSONLoader
 import operator
 import pickle
 from collections import Counter
 import fasttext
-from flair.data import Sentence
 
 # UNK = '<UNK>'
 # PAD = '<PAD>'
@@ -53,13 +49,10 @@ def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 3
 
 
 
-def get_embedding(vecs, word_to_idx, embed_size, glove = None):
+def get_embedding(vecs, word_to_idx, embed_size):
+	# Retrieves relevant word vectors and returns as matrix
 	embed_table = [vecs[key] if key in word_to_idx.keys() else np.random.rand(embed_size) for key in sorted(word_to_idx.keys())]
-	if glove:
-		glove_emb = [Sentence(key) for key in sorted(word_to_idx.keys())]
-		[glove.embed(k) for k in glove_emb]
-		glove_emb = [tok.embedding for tok in glove_emb]
-		embed_table = [np.concatenate([x1,x2]) for x1, x2 in zip(embed_table, glove_emb)]
+
 	embed_table = np.array(embed_table, dtype=float)
 	return embed_table
 
@@ -101,9 +94,11 @@ def parse_dataset(dataset_dir, dataset_name, nr_tags, tags_to_use=None):
 	with open(os.path.join(dataset_dir, dataset_name + '.pkl'), 'wb') as f:
 		pickle.dump(docs, f)
 
-
+# if (word_counter and min_freq): # return if enough occurences when using preloaded word_to_idx
+# 			return word_to_idx[word] if word_counter[word] >= min_freq else word_to_idx[unk]
 
 def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None, unk='<UNK>'):
+
 	try:
 		return word_to_idx[word]
 	except KeyError:
@@ -135,18 +130,24 @@ def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_wo
 	return sample
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50, encoder=None):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
 	n_labels = len(label_to_idx)
 	dset = []
 	tag_counter = Counter()
+	stoi = None
+
+	if min_freq_word:
+		word_counter = Counter([w for doc in docs for sent in doc.sentences for w in sent])
+
 	if word_to_idx is None:
 		word_to_idx = OrderedDict()
 		word_to_idx[pad] = pad_idx
 		word_to_idx[unk] = unk_idx
-		word_counter = Counter([w for doc in docs for sent in doc.sentences for w in sent])
+	elif min_freq_word:
+		stoi = {k:v for k,v in word_to_idx.items() if (word_counter[k] >= min_freq_word) or (k in [pad, unk])}
 
 	print('Loading and converting docs to PyTorch backend...')
 	for doc in docs:
@@ -155,7 +156,10 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 		tags = [int(label_to_idx[tag]) for tag in doc.tags]
 		tag_counter.update(tags)
 		# convert sentences to indices of words
-		sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for sent in doc.sentences]
+		if stoi: # preloaded word to idx, no need to update it
+			sents = [torch.LongTensor([stoi.get(w, stoi[unk]) for w in sent]) for sent in doc.sentences]
+		else:
+			sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for sent in doc.sentences]
 
 		# convert to tensors
 		sample['tags'] = np.zeros(n_labels)
@@ -164,9 +168,6 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
 
 		sample['encoding'] = torch.FloatTensor(doc.encoding)
-		# if encoder:
-		# 	# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-		# 	sample['encoding'] = encoder.encode(torch.LongTensor([tok for sen in sents for tok in sen]).unsqueeze(0))
 
 		dset.append(sample)
 
