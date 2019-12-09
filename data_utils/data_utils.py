@@ -110,31 +110,37 @@ def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None, un
 		# map to <UNK>
 		return word_to_idx[unk]
 
-def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_word=50):
+def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_freq_word=50, unk='<UNK>', stoi = None, tag_counter = None):
+
+	n_labels = len(label_to_idx)
 	sample = {}
 	# collect tags
 	tags = [int(label_to_idx[tag]) for tag in doc.tags]
+	if tag_counter: # Keep track of #occurrences of each tag
+		tag_counter.update(tags)
 	# convert sentences to indices of words
-	sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word) for w in sent]) for
-			 sent in doc.sentences]
+	if stoi:  # preloaded word to idx, no need to update it
+		sents = [torch.LongTensor([stoi.get(w, stoi[unk]) for w in sent]) for sent in doc.sentences]
+	else:
+		sents = [
+			torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for
+			sent in doc.sentences]
 
 	# convert to tensors
-	sample['tags'] = np.zeros(len(label_to_idx))
+	sample['tags'] = np.zeros(n_labels)
 	sample['tags'][tags] = 1
 	sample['tags'] = torch.FloatTensor(sample['tags'])  # One Hot Encoded target
-	sents, sents_len = stack_and_pad_tensors(sents)
-	sample['sents'] = sents  # , _ =
-	sample['sents_len'] = sents_len
-	sample['doc_len'] = len(sents)
+	sample['sents'] = sents  # , _ = stack_and_pad_tensors(sents)
 
-	return sample
+	sample['encoding'] = torch.FloatTensor(doc.encoding)
+
+	return sample, tag_counter
 
 
 def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
-	n_labels = len(label_to_idx)
 	dset = []
 	tag_counter = Counter()
 	stoi = None
@@ -151,23 +157,8 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 
 	print('Loading and converting docs to PyTorch backend...')
 	for doc in docs:
-		sample = {}
-		# collect tags
-		tags = [int(label_to_idx[tag]) for tag in doc.tags]
-		tag_counter.update(tags)
-		# convert sentences to indices of words
-		if stoi: # preloaded word to idx, no need to update it
-			sents = [torch.LongTensor([stoi.get(w, stoi[unk]) for w in sent]) for sent in doc.sentences]
-		else:
-			sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for sent in doc.sentences]
-
-		# convert to tensors
-		sample['tags'] = np.zeros(n_labels)
-		sample['tags'][tags] = 1
-		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
-		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
-
-		sample['encoding'] = torch.FloatTensor(doc.encoding)
+		sample, tag_counter = doc_to_sample(doc, label_to_idx, word_to_idx, word_counter, stoi=stoi, min_freq_word= min_freq_word,
+											unk=unk, tag_counter=tag_counter)
 
 		dset.append(sample)
 
