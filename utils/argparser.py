@@ -2,7 +2,7 @@ import configargparse
 import os
 
 def get_parser():
-	parser = configargparse.ArgParser(default_config_files=['.\\parameters.ini'])
+	parser = configargparse.ArgParser(default_config_files=['parameters.ini'])
 	#  MAIN ARGUMENTS
 	parser.add_argument('-c', '--my-config',
 						required=False,

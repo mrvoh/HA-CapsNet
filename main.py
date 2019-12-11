@@ -16,7 +16,7 @@ import tqdm
 from utils.argparser import get_parser
 from data_utils.data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
 from text_class_learner import MultiLabelTextClassifier
-from data_utils.eur_lex57k_to_doc import parse as eur_lex_parse
+# from data_utils.eur_lex57k_to_doc import parse as eur_lex_parse
 from data_utils.reuters_to_doc import parse as reuters_parse
 from data_utils.csv_to_documents import sheet_to_docs as parse_sheet
 from model import FastTextLearner

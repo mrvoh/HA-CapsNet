@@ -130,7 +130,7 @@ class MultiLabelTextClassifier:
 
 	@classmethod
 	def load(cls, path):
-		params = torch.load(path)
+		params = torch.load(path, map_location=torch.device('gpu' if torch.cuda.is_available() else 'cpu'))
 		params_no_weight = {k:v for k,v in params.items() if k != 'state_dict'}
 
 		self = cls(**params_no_weight)
