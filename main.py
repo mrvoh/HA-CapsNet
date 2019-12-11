@@ -215,9 +215,8 @@ def main():
 													  lr=args.learning_rate)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
-									  args.word_vec_path, args.use_glove,
+									  args.word_vec_path, pos_weight=pos_weight,
 									  word_encoder=args.word_encoder, sent_encoder=args.sent_encoder,
-									  pos_weight=pos_weight,
 									  dim_caps=args.dim_caps, num_caps=args.num_caps,
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,

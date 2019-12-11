@@ -75,12 +75,16 @@ class ULMFiTEncoder(nn.Module):
 	def __init__(self, pretrained_path, num_tokens, dropout_factor):
 		super(ULMFiTEncoder, self).__init__()
 		# state_dict = torch.loa
-		config = {'emb_sz': 400, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
-		config['n_hid'] = 1150
-		#TODO: save config in state_dict when finetuning
-		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
+		config = {'emb_sz': 400, 'n_hid': 1150, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2}
+		config['vocab_sz'] = num_tokens
 
-		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
+		lm = AWD_LSTM(**config)
+		#TODO: save config in state_dict when finetuning
+		# lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
+		#
+		# lm.load_encoder(pretrained_path)
+		sd = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
+		lm.load_state_dict(sd)
 		# self.bn = nn.BatchNorm1d(config['emb_sz'])
 		self.ln = nn.LayerNorm(config['emb_sz'])
 		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
