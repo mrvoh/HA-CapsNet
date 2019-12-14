@@ -1,7 +1,7 @@
 # from torchnlp.word_to_vector import FastText
 from torchnlp.datasets import Dataset
 from torchnlp.samplers import BucketBatchSampler
-from torchnlp.encoders.text import stack_and_pad_tensors
+from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 from torch.utils.data import DataLoader
 import torch
 # import nltk
@@ -166,31 +166,29 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 
 # Collate function
 def collate_fn_rnn(batch):
-
-	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
-	doc_lens_batch = [len(doc['sents']) for doc in batch]
-
-
-	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
-	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
-
-	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-	sents_batch = sents_batch.to(device)
-	sents_len_batch = sents_len_batch.to(device)
-	# doc_lens_batch = doc_lens_batch.to(device)
-	tags_batch = tags_batch.to(device)
-
-	# PyTorch RNN requires batches to be transposed for speed and integration with CUDA
+	# # PyTorch RNN requires batches to be transposed for speed and integration with CUDA
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
-	if 'encoding' in batch[0].keys():
+	# Shape tensors in right format
+	sents_len_batch = [[len(sent) for sent in doc['sents']] for doc in batch]
+	max_sent_len = max([max(s) for s in sents_len_batch])
+	sents_batch, doc_lens_batch = stack_and_pad_tensors(
+		[torch.stack([pad_tensor(sent, max_sent_len) for sent in doc['sents']]) for doc in batch])
+	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
+
+	# Move to device
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+	sents_batch = sents_batch.to(device)
+	tags_batch = tags_batch.to(device)
+
+	if 'encoding' in batch[0].keys():  # add doc encoding if applicable
 		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
-		return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch, encoding_batch)
+		return (transpose(sents_batch), tags_batch, encoding_batch)
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)
+	return (transpose(sents_batch), tags_batch, None)
 
-def collate_fn_transformer(batch):
+def collate_fn_transformer1(batch):
 
 	# test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
@@ -202,7 +200,7 @@ def collate_fn_transformer(batch):
 	# sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
 	# word_len_batch, _ = stack_and_pad_tensors([seq['word_len'] for seq in batch])
 
-	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 	sents_batch = sents_batch.to(device)
 	sents_len_batch = sents_len_batch.to(device)
 	# doc_lens_batch = doc_lens_batch.to(device)
@@ -214,6 +212,28 @@ def collate_fn_transformer(batch):
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
 	return (sents_batch, sents_len_batch, doc_lens_batch, tags_batch)
+
+
+
+def collate_fn_transformer(batch): #multigpu implementation
+
+	# Shape tensors in right format
+	sents_len_batch = [[len(sent) for sent in doc['sents']] for doc in batch]
+	max_sent_len = max([max(s) for s in sents_len_batch])
+	sents_batch, doc_lens_batch = stack_and_pad_tensors([torch.stack([pad_tensor(sent, max_sent_len) for sent in doc['sents']]) for doc in batch])
+	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
+
+	# Move to device
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+	sents_batch = sents_batch.to(device)
+	tags_batch = tags_batch.to(device)
+
+	if 'encoding' in batch[0].keys(): # add doc encoding if applicable
+		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
+		return (sents_batch, tags_batch, encoding_batch)
+
+	# return (word_ids_batch, seq_len_batch, label_batch)
+	return (sents_batch, tags_batch, None)
 
 
 # Get dataloader

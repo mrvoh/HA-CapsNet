@@ -110,7 +110,7 @@ class MultiLabelTextClassifier:
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
 		self.num_labels = len(label_to_idx)
-		self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+		self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 		self.logger = get_logger(self.log_path)
 		self.writer = SummaryWriter(log_dir= tensorboard_dir,
 									comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, self.num_labels, B_train, weight_decay, dropout))
@@ -246,12 +246,12 @@ class MultiLabelTextClassifier:
 
 		# Get predictions
 		with torch.no_grad():
-			(sents_batch, sents_len_batch, doc_lens_batch, tags_batch, encoding_batch) = \
+			(sents_batch, tags_batch, encoding_batch) = \
 				collate_fn_rnn([sample]) if self.word_encoder.lower() == 'gru' else collate_fn_transformer([sample])
 			# if self.word_encoder.lower() == 'gru':
 			# 	batch = colla
 
-			preds, word_attention_scores, sent_attention_scores, _ = self.model(sents_batch, sents_len_batch, doc_lens_batch)
+			preds, word_attention_scores, sent_attention_scores, _ = self.model(sents_batch)
 
 		# convert to lists
 		preds = list(preds.cpu().numpy())
@@ -263,7 +263,7 @@ class MultiLabelTextClassifier:
 		sent_attention_scores = [l[0] for sublist in sent_attention_scores for l in sublist]
 
 		# Filter predictions for padding
-		sents_len = sents_len_batch.cpu().numpy()
+		_, _, sents_len = sents_batch.size()
 		if len(sents_len) > 1:
 			word_attention_scores = [score[:l] for l,score in zip(sents_len, word_attention_scores)]
 		else:
@@ -315,11 +315,11 @@ class MultiLabelTextClassifier:
 			train_step += 1
 			optimizer.zero_grad()
 
-			(sents, sents_len, doc_lens, target, doc_encoding) = batch
+			(sents, target, doc_encoding) = batch
 			if self.use_doc_encoding: # Capsule based models
-				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens, doc_encoding)
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, doc_encoding)
 			else: # Other models
-				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens) # rec loss defaults to 0 for non-CapsNet models
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents) # rec loss defaults to 0 for non-CapsNet models
 
 			loss = criterion(preds, target)
 			loss += rec_loss
@@ -404,12 +404,12 @@ class MultiLabelTextClassifier:
 		with torch.no_grad():
 			for batch_idx, batch in enumerate(dataloader):
 
-				(sents, sents_len, doc_lens, target, doc_encoding) = batch
+				(sents, target, doc_encoding) = batch
 
 				if self.use_doc_encoding:  # Capsule based models
-					preds = self.model(sents, sents_len, doc_lens, doc_encoding)[0]
+					preds = self.model(sents, doc_encoding)[0]
 				else:
-					preds = self.model(sents, sents_len, doc_lens)[0]
+					preds = self.model(sents)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets
