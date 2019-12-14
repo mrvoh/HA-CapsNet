@@ -89,7 +89,7 @@ class ULMFiTEncoder(nn.Module):
 		self.ln = nn.LayerNorm(config['emb_sz'])
 		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
 
-		self.ulmfit = next(lm.modules())[0]
+		self.ulmfit = lm #next(lm.modules())[0]
 
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
