@@ -110,7 +110,7 @@ def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None, un
 		# map to <UNK>
 		return word_to_idx[unk]
 
-def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_freq_word=50, unk='<UNK>', stoi = None, tag_counter = None):
+def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_freq_word=50, unk='<UNK>', stoi = None, tag_counter = None, label_value = 1.0):
 
 	n_labels = len(label_to_idx)
 	sample = {}
@@ -128,7 +128,7 @@ def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_f
 
 	# convert to tensors
 	sample['tags'] = np.zeros(n_labels)
-	sample['tags'][tags] = 1
+	sample['tags'][tags] = label_value
 	sample['tags'] = torch.FloatTensor(sample['tags'])  # One Hot Encoded target
 	sample['sents'] = sents  # , _ = stack_and_pad_tensors(sents)
 
@@ -137,7 +137,7 @@ def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_f
 	return sample, tag_counter
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50, label_value = 1.0):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
@@ -158,7 +158,7 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 	print('Loading and converting docs to PyTorch backend...')
 	for doc in docs:
 		sample, tag_counter = doc_to_sample(doc, label_to_idx, word_to_idx, word_counter, stoi=stoi, min_freq_word= min_freq_word,
-											unk=unk, tag_counter=tag_counter)
+											unk=unk, tag_counter=tag_counter, label_value=label_value)
 
 		dset.append(sample)
 

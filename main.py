@@ -59,7 +59,7 @@ def main():
 										 'ulmfit'], "The word encoder (--word_encoder) can only be set to GRU, Transformer and ULMFiT."
 	assert args.sent_encoder.lower() in ['gru',
 										 'transformer'], "The sentence encoder (--sent_encoder) can only be set to GRU or Transformer."
-
+	assert 0 < args.label_value <= 1, "The label value (--label_value) must be between 0 and 1 in order to compute the loss."
 	if args.word_encoder.lower() == 'ulmfit':
 		assert args.ulmfit_pretrained_path is not None, "if ULMFiT is chosen as word encoder its corresponding pretrained path (--ulmfit_pretrained_path) must be given."
 		assert args.preload_word_to_idx, "If ULMFiT is chosen as word encoder --preload_word_to_idx must be set to True."
@@ -174,7 +174,8 @@ def main():
 		train_dataset, word_to_idx, tag_counter_train = process_dataset(train_docs, word_to_idx=word_to_idx,
 																		label_to_idx=label_to_idx,
 																		min_freq_word=args.min_freq_word,
-																		unk=unk, pad=pad)
+																		unk=unk, pad=pad,
+																		label_value = args.label_value)
 		pos_weight = [v / len(train_dataset) for k, v in tag_counter_train.items()]
 		# Fix for when not all labels are present in train set
 		if len(pos_weight) != len(label_to_idx):
@@ -191,7 +192,7 @@ def main():
 
 		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx,
 																	label_to_idx=label_to_idx, min_freq_word=None,
-																	unk=unk, pad=pad)
+																	unk=unk, pad=pad, label_value = args.label_value)
 		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, False, use_rnn)
 		# Free some memory
 		del dev_dataset
@@ -243,7 +244,8 @@ def main():
 		test_dataset, word_to_idx, _ = process_dataset(test_docs, word_to_idx=word_to_idx,
 													   label_to_idx=label_to_idx,
 													   min_freq_word=None,
-													   unk=unk, pad=pad)
+													   unk=unk, pad=pad,
+													   label_value = args.label_value)
 
 		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn)
 
