@@ -182,7 +182,7 @@ class AttentionWordEncoder(nn.Module):
 			x_emb = self.lookup(x)
 
 			if self.encoder_type.lower() == 'gru':
-				x1, _ = self.word_encoder(self.drop1(x_emb))
+				x1, _ = self.word_encoder(self.drop1(x_emb.permute(1,0,2)))
 			elif self.encoder_type.lower() == 'transformer':
 				x1 = self.word_encoder(self.drop1(x_emb))
 

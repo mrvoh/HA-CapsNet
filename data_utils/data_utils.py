@@ -15,7 +15,10 @@ from data_utils.json_loader import JSONLoader
 import operator
 import pickle
 from collections import Counter
-import fasttext
+try:
+	import fasttext
+except:
+	print('WARNING: Fasttext module not loaded.')
 
 # UNK = '<UNK>'
 # PAD = '<PAD>'
@@ -183,10 +186,10 @@ def collate_fn_rnn(batch):
 
 	if 'encoding' in batch[0].keys():  # add doc encoding if applicable
 		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
-		return (transpose(sents_batch), tags_batch, encoding_batch)
+		return (sents_batch, tags_batch, encoding_batch)
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(sents_batch), tags_batch, None)
+	return (sents_batch, tags_batch, None)
 
 def collate_fn_transformer1(batch):
 

@@ -3,7 +3,10 @@ import torch.nn as nn
 from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 # ## Word attention model with bias
 from layers import *
-import fasttext
+try:
+	import fasttext
+except:
+	print('WARNING: Fasttext module not loaded.')
 transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 ULMFIT_OUT_SIZE = 400
@@ -46,8 +49,8 @@ class HAN(nn.Module):
         self.n_classes = num_classes
         self.word_hidden = word_hidden
         self.bidirectional = bidirectional
-        self.word_contextualizer = word_encoder
-        self.sent_contextualizer = sent_encoder
+        self.word_encoder = word_encoder
+        self.sent_encoder = sent_encoder
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE # static ULMFiT value
@@ -90,6 +93,7 @@ class HAN(nn.Module):
     def forward(self, sents):
 
         # for support of multi-gpu
+
         n_doc, n_sents, sen_len = sents.size()
         sents = sents.view(-1, sen_len)
 
@@ -343,3 +347,8 @@ class HCapsNetMultiHeadAtt(nn.Module):
         rec_loss = self.caps_classifier.reconstruction_loss(encoding, poses)
 
         return activations, word_attn_weight, sent_attn_weight, rec_loss
+
+
+class MyDataParallel(nn.DataParallel):
+    def __getattr__(self, name):
+        return getattr(self.module, name)
