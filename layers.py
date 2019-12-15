@@ -182,7 +182,7 @@ class AttentionWordEncoder(nn.Module):
 			x_emb = self.lookup(x)
 
 			if self.encoder_type.lower() == 'gru':
-				x1, _ = self.word_encoder(self.drop1(x_emb))
+				x1, _ = self.word_encoder(self.drop1(x_emb.permute(1,0,2)))
 			elif self.encoder_type.lower() == 'transformer':
 				x1 = self.word_encoder(self.drop1(x_emb))
 
@@ -592,6 +592,8 @@ class CapsNet_Text(nn.Module):
 		return poses, activations
 
 	def reconstruction_loss(self, doc_enc, input, size_average=True):
+		# Simply return 0 when no reconstruction loss is considered
+		if self.recon_error_lambda == 0: return 0
 		# Get the lengths of capsule outputs.
 		# input = self.bn(input)
 		v_mag = torch.sqrt((input ** 2).sum(dim=2))

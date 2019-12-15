@@ -3,7 +3,10 @@ import torch.nn as nn
 from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 # ## Word attention model with bias
 from layers import *
-import fasttext
+try:
+	import fasttext
+except:
+	print('WARNING: Fasttext module not loaded.')
 transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 ULMFIT_OUT_SIZE = 400
@@ -46,8 +49,8 @@ class HAN(nn.Module):
         self.n_classes = num_classes
         self.word_hidden = word_hidden
         self.bidirectional = bidirectional
-        self.word_contextualizer = word_encoder
-        self.sent_contextualizer = sent_encoder
+        self.word_encoder = word_encoder
+        self.sent_encoder = sent_encoder
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE # static ULMFiT value
@@ -87,11 +90,16 @@ class HAN(nn.Module):
         return params
 
 
-    def forward(self, sents, sents_len, doc_lens):
+    def forward(self, sents):
+
+        # for support of multi-gpu
+
+        n_doc, n_sents, sen_len = sents.size()
+        sents = sents.view(-1, sen_len)
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        sen_encodings = sen_encodings.split(split_size=doc_lens)
+        sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
         # stack and pad
         sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
         # get predictions
@@ -151,11 +159,15 @@ class HGRULWAN(nn.Module):
 
             return params
 
-        def forward(self, sents, sents_len, doc_lens):
+        def forward(self, sents):
+
+            # for support of multi-gpu
+            n_doc, n_sents, sen_len = sents.size()
+            sents = sents.view(-1, sen_len)
 
             sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-            sen_encodings = sen_encodings.split(split_size=doc_lens)
+            sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
             # stack and pad
             sen_encodings, _ = stack_and_pad_tensors(sen_encodings) #
             # get predictions
@@ -226,11 +238,15 @@ class HCapsNet(nn.Module):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
 
-    def forward(self, sents, sents_len, docs_len, encoding=None):
+    def forward(self, sents, encoding=None):
+
+        # for support of multi-gpu
+        n_doc, n_sents, sen_len = sents.size()
+        sents = sents.view(-1, sen_len)
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        sen_encodings = sen_encodings.split(split_size=docs_len)
+        sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
         # stack and pad
         sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
         # get predictions
@@ -308,14 +324,15 @@ class HCapsNetMultiHeadAtt(nn.Module):
         return params
 
 
-    def forward(self, sents, sents_len, doc_lens, encoding):
+    def forward(self, sents, encoding):
+
+        # for support of multi-gpu
+        n_doc, n_sents, sen_len = sents.size()
+        sents = sents.view(-1, sen_len)
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        # if self.word_contextualizer != self.sent_contextualizer:
-        #     sen_encodings = sen_encodings.permute(1, 0, 2)
-
-        sen_encodings = sen_encodings.split(split_size=doc_lens)
+        sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
         # stack and pad
         sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
         # get predictions
@@ -330,3 +347,8 @@ class HCapsNetMultiHeadAtt(nn.Module):
         rec_loss = self.caps_classifier.reconstruction_loss(encoding, poses)
 
         return activations, word_attn_weight, sent_attn_weight, rec_loss
+
+
+class MyDataParallel(nn.DataParallel):
+    def __getattr__(self, name):
+        return getattr(self.module, name)

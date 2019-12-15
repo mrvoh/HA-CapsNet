@@ -221,7 +221,7 @@ def main():
 									  dim_caps=args.dim_caps, num_caps=args.num_caps,
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
-									  dropout_factor_ulmfit=args.dropout_factor)
+									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

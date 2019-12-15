@@ -1,6 +1,3 @@
-# (C) Mathieu Blondel, November 2013
-# License: BSD 3 clause
-
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
 from sklearn.utils.multiclass import type_of_target
