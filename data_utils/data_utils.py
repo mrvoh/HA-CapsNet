@@ -135,7 +135,7 @@ def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_f
 	sample['tags'] = torch.FloatTensor(sample['tags'])  # One Hot Encoded target
 	sample['sents'] = sents  # , _ = stack_and_pad_tensors(sents)
 
-	sample['encoding'] = torch.FloatTensor(doc.encoding)
+	if doc.encoding is not None: sample['encoding'] = torch.FloatTensor(doc.encoding)
 
 	return sample, tag_counter
 
