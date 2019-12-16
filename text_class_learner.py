@@ -353,8 +353,10 @@ class MultiLabelTextClassifier:
 
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
 		# Eval dev
+
+		write_path = os.path.join('class_reports', '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
-			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K)
+			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
 
 		# Eval Train
 		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
@@ -402,7 +404,7 @@ class MultiLabelTextClassifier:
 
 		return best_score, best_loss
 
-	def eval_dataset(self, dataloader, K=5, max_samples=None):
+	def eval_dataset(self, dataloader, K=5, max_samples=None, write_path = None):
 		self.logger.info("Evaluating model")
 		self.model.eval()
 		y_pred = []
@@ -431,7 +433,10 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False)
+		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False) #TODO: remove hard-coded stuff
+
+		if write_path is not None:
+			write_classification_report(write_path, y_pred, y_true, self.label_to_idx, False) #TODO: remove hard-coded stuff
 
 		self.logger.info("Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'

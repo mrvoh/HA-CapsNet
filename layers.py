@@ -495,7 +495,7 @@ class FCCaps(nn.Module):
 		W1 = W1.repeat(batch_size, 1, 1, 1, 1)
 		u_hat = torch.matmul(W1, x)
 
-		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).cuda()
+		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
@@ -514,7 +514,7 @@ class FCCaps(nn.Module):
 		W1 = W1.repeat(batch_size, 1, 1, 1, 1)
 		u_hat = torch.matmul(W1, x)
 
-		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, variable_output_capsule_num, 1)).cuda()
+		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, variable_output_capsule_num, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE == True:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
@@ -611,7 +611,7 @@ class CapsNet_Text(nn.Module):
 
 			# Copy only the maximum capsule index from this batch sample.
 			# This masks out (leaves as zero) the other capsules in this sample.
-			batch_masked = Variable(torch.zeros(input_batch.size())).cuda()
+			batch_masked = Variable(torch.zeros(input_batch.size())).to(next(self.parameters()).device)
 			batch_masked[v_max_index[batch_idx]] = input_batch[v_max_index[batch_idx]]
 			all_masked[batch_idx] = batch_masked
 

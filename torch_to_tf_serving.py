@@ -157,14 +157,12 @@ def main(args):
     model = learner.model
 
     n_docs = 5
-    n_sents = n_docs * 3
+    n_sents = 7
     sents_len = 100
-    sents = torch.LongTensor(n_sents, sents_len) #TODO: variable seq len?
-    sents_len = torch.LongTensor(n_sents)
-    doc_lens = torch.LongTensor(n_docs)
+    sents = torch.ones(n_docs, n_sents, sents_len, dtype=torch.long) #TODO: variable seq len?
 
-    dummy_inputs = (sents, sents_len, doc_lens)
-    input_names = ('sents', 'sents_len', 'docs_len')
+    dummy_inputs = sents
+    input_names = 'sents'
     # img_input = torch.randn(1, 3, 224, 224)
 
     # input_names = ['input_img']
@@ -177,7 +175,7 @@ def main(args):
     export_onnx(model, dummy_inputs, args.onnx_file,
                 input_names=input_names,
                 output_names=output_names,
-                num_inputs=len(dummy_inputs))
+                num_inputs=1)
     input_tensors, output_tensors = export_tf_proto(args.onnx_file,
                                                     args.meta_file)
     export_for_serving(args.meta_file, args.export_dir, input_tensors,
@@ -188,7 +186,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--pretrained_path', help="Path to model to export.", type=str,
-        default='models/HCapsNet_loss=0.02214_RP5=0.921.pt')
+        default='models/HCapsNet_loss=0.03844_RP5=0.685.pt')
     parser.add_argument(
         '--onnx-file', help="File where to export the ONNX file", type=str,
         default='tmp_onnx.onnx')
