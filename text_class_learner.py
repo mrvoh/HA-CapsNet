@@ -5,13 +5,16 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torchnlp.encoders.text import stack_and_pad_tensors
 
-from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt
-from data_utils.data_utils import get_embedding, _convert_word_to_idx
+from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt, MyDataParallel
+from data_utils.data_utils import get_embedding, doc_to_sample, collate_fn_rnn, collate_fn_transformer
 from utils.radam import RAdam
 from utils.logger import get_logger, Progbar
 from utils.metrics import *
-from document_model import Document
-import fasttext
+from document_model import Document, TextPreprocessor
+try:
+	import fasttext
+except:
+	print('WARNING: Fasttext module not loaded.')
 from torchnlp.word_to_vector.pretrained_word_vectors import _PretrainedWordVectors
 
 try:
@@ -110,7 +113,7 @@ class MultiLabelTextClassifier:
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
 		self.num_labels = len(label_to_idx)
-		self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+		self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 		self.logger = get_logger(self.log_path)
 		self.writer = SummaryWriter(log_dir= tensorboard_dir,
 									comment='Model={}-Labels={}-B={}-L2={}-Dropout={}'.format(model_name, self.num_labels, B_train, weight_decay, dropout))
@@ -150,15 +153,15 @@ class MultiLabelTextClassifier:
 		model.load_state_dict(params['state_dict'])
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")
-			model = nn.DataParallel(model)
+			model = MyDataParallel(model)
 		model.to(self.device)
 		self.model = model
 
 		return self
 
-	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, use_glove, word_encoder = 'gru', sent_encoder = 'gru',
+	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
-				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -190,13 +193,19 @@ class MultiLabelTextClassifier:
 									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit,
 									lambda_reg_caps = lambda_reg_caps)
 
-		# Initialize training attributes
-		if 'caps' in self.model_name.lower():
-			self.criterion = torch.nn.BCELoss()
+		if binary_class:
+			# Initialize training attributes
+			if 'caps' in self.model_name.lower():
+				self.criterion = torch.nn.BCELoss()
+			else:
+				if pos_weight:
+					pos_weight = torch.tensor(pos_weight).to(self.device)
+				self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 		else:
-			if pos_weight:
-				pos_weight = torch.tensor(pos_weight).to(self.device)
-			self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
+			if 'caps' in self.model_name.lower():
+				self.criterion = torch.nn.NLLLoss()
+			else:
+				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
 		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -209,57 +218,49 @@ class MultiLabelTextClassifier:
 
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")
-			self.model = nn.DataParallel(self.model)
+			self.model = MyDataParallel(self.model)
 		self.model.to(self.device)
 
 
-	def pred_to_labels(self, pred, top=5):
+	def pred_to_labels(self, pred, top=None):
 		# Converts prediction for single doc to original label names
 		if isinstance(pred, torch.Tensor):
 			pred = pred.cpu().numpy()
 			
 		pred = pred[0]
 
-		ind = np.argpartition(pred, -top)[-top:]
-		highest_scoring = ind[np.argsort(pred[ind])]
+		if top:
+			ind = np.argpartition(pred, -top)[-top:]
+			preds = ind[np.argsort(pred[ind])]
+		else:
+			preds = list(np.nonzero(pred > .5))
+			preds = [p[0] for p in preds]
+			print(preds)
 
 		idx_to_label = {v:k for k,v in self.label_to_idx.items()}
 
-		label_ids = [idx_to_label[p] for p in highest_scoring]
-		label_descriptions = [self.label_map[ix]['label'] for ix in label_ids]
-		return label_descriptions
+		labels = [idx_to_label[p] for p in preds]
+		# label_descriptions = [self.label_map[ix]['label'] for ix in label_ids]
+		return labels
 
 	def predict_doc(self, doc):
 
 		assert self.model is not None, "Model needs to be initialized before inference can be done."
 		self.model.eval()
-		# convert doc to tensors
-		sample = {}
-		# collect tags
-		tags = [int(self.label_to_idx[tag]) for tag in doc.tags if tag in self.label_to_idx]
-		# convert sentences to indices of words
-		sents = [torch.LongTensor([_convert_word_to_idx(w, self.word_to_idx, None, None) for w in sent]) for
-				 sent in doc.sentences]
+		unk = 'xxunk' if self.word_encoder.lower() == 'ulmfit' else '<UNK>'
+		sample, _ = doc_to_sample(doc, self.label_to_idx, None, stoi=self.word_to_idx, unk=unk)
 
-		# convert to tensors
-		sample['tags'] = np.zeros(len(self.label_to_idx))
-		sample['tags'][tags] = 1
-		sample['tags'] = torch.FloatTensor(sample['tags']).to(self.device)  # One Hot Encoded target
-		sents, sents_len = stack_and_pad_tensors(sents)
-		sample['sents'] = sents.to(self.device)   # , _ =
-		sample['sents_len'] = sents_len.to(self.device)
-		sample['doc_len'] = [len(sents)]
-
-		# For usage of Pytorch RNN
+		# # For usage of Pytorch RNN
 		transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
 		# Get predictions
 		with torch.no_grad():
-			if self.word_encoder.lower() == 'gru':
-				sample['sents'] = transpose(sample['sents'])
+			(sents_batch, tags_batch, encoding_batch) = \
+				collate_fn_rnn([sample]) if self.word_encoder.lower() == 'gru' else collate_fn_transformer([sample])
+			# if self.word_encoder.lower() == 'gru':
+			# 	batch = colla
 
-			preds, word_attention_scores, sent_attention_scores = self.model(sample['sents'], sample['sents_len'],
-																	sample['doc_len'])
+			preds, word_attention_scores, sent_attention_scores, _ = self.model(sents_batch)
 
 		# convert to lists
 		preds = list(preds.cpu().numpy())
@@ -271,7 +272,7 @@ class MultiLabelTextClassifier:
 		sent_attention_scores = [l[0] for sublist in sent_attention_scores for l in sublist]
 
 		# Filter predictions for padding
-		sents_len = sents_len.cpu().numpy()
+		_, _, sents_len = sents_batch.size()
 		if len(sents_len) > 1:
 			word_attention_scores = [score[:l] for l,score in zip(sents_len, word_attention_scores)]
 		else:
@@ -282,8 +283,10 @@ class MultiLabelTextClassifier:
 
 	def predict_text(self, text, return_doc=False):
 		# convert text to Document
-		sentences = [text]
-		doc = Document('', [], sentences=sentences, discard_short_sents=False, split_size_long_seqs=50)
+
+		text_preprocessor = TextPreprocessor(self.word_encoder.lower() == 'ulmfit')
+		#TODO: split_size_long_seqs --> save in object?
+		doc = Document([], text_preprocessor, text, discard_short_sents=False, split_size_long_seqs=50)
 		# predict as doc
 		if return_doc:
 			p, w, s = self.predict_doc(doc)
@@ -321,11 +324,11 @@ class MultiLabelTextClassifier:
 			train_step += 1
 			optimizer.zero_grad()
 
-			(sents, sents_len, doc_lens, target, doc_encoding) = batch
+			(sents, target, doc_encoding) = batch
 			if self.use_doc_encoding: # Capsule based models
-				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens, doc_encoding)
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, doc_encoding)
 			else: # Other models
-				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, sents_len, doc_lens) # rec loss defaults to 0 for non-CapsNet models
+				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents) # rec loss defaults to 0 for non-CapsNet models
 
 			loss = criterion(preds, target)
 			loss += rec_loss
@@ -410,17 +413,17 @@ class MultiLabelTextClassifier:
 		with torch.no_grad():
 			for batch_idx, batch in enumerate(dataloader):
 
-				(sents, sents_len, doc_lens, target, doc_encoding) = batch
+				(sents, target, doc_encoding) = batch
 
 				if self.use_doc_encoding:  # Capsule based models
-					preds = self.model(sents, sents_len, doc_lens, doc_encoding)[0]
+					preds = self.model(sents, doc_encoding)[0]
 				else:
-					preds = self.model(sents, sents_len, doc_lens)[0]
+					preds = self.model(sents)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets
 				y_pred.extend(list(preds.cpu().detach().numpy()))
-				y_true.extend(list(target.cpu().detach().numpy()))
+				y_true.extend(list(np.round(target.cpu().detach().numpy())))
 
 				if max_samples:
 					if batch_idx >= max_samples:
@@ -430,7 +433,7 @@ class MultiLabelTextClassifier:
 
 		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False)
 
-		self.logger.info("Hamming loss {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
+		self.logger.info("Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		for i in range(1, K + 1):

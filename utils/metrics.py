@@ -1,6 +1,3 @@
-# (C) Mathieu Blondel, November 2013
-# License: BSD 3 clause
-
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
 from sklearn.utils.multiclass import type_of_target
@@ -39,14 +36,7 @@ def accuracy(y_true, y_pred, convert_logits):
 	else:
 		y_pred = (y_pred > 0).astype(int)
 
-	# n_correct = np.sum(np.all(y_true == y_pred, axis=1))
-	# n_rows = y_true.shape[0]
-	# accuracy = n_correct / n_rows
-	# accuracy = np.sum(y_pred == y_true) / y_true.size
-
-	# n_correct = np.sum((y_true == y_pred) & (y_true == 1))
-	# n_total = np.sum(y_true == 1) + np.sum(y_pred == 1)
-	# accuracy = 2*n_correct / n_total
+	y_true = (y_true > 0.5).astype(int)
 
 	hamming = hamming_score(y_true, y_pred)
 	emr = accuracy_score(y_true, y_pred, normalize=True)

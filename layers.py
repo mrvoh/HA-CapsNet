@@ -75,17 +75,21 @@ class ULMFiTEncoder(nn.Module):
 	def __init__(self, pretrained_path, num_tokens, dropout_factor):
 		super(ULMFiTEncoder, self).__init__()
 		# state_dict = torch.loa
-		config = {'emb_sz': 400, 'n_hid': 1152, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'output_p': 0.1, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2, 'tie_weights': True, 'out_bias': True}
-		config['n_hid'] = 1150
-		#TODO: save config in state_dict when finetuning
-		lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
+		config = {'emb_sz': 400, 'n_hid': 1150, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2}
+		config['vocab_sz'] = num_tokens
 
-		lm.load_state_dict(torch.load(pretrained_path, map_location=lambda storage, loc: storage))
+		lm = AWD_LSTM(**config)
+		#TODO: save config in state_dict when finetuning
+		# lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
+		#
+		# lm.load_encoder(pretrained_path)
+		sd = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
+		lm.load_state_dict(sd)
 		# self.bn = nn.BatchNorm1d(config['emb_sz'])
 		self.ln = nn.LayerNorm(config['emb_sz'])
 		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
 
-		self.ulmfit = next(lm.modules())[0]
+		self.ulmfit = lm #next(lm.modules())[0]
 
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
@@ -144,14 +148,6 @@ class AttentionWordEncoder(nn.Module):
 		self.bidirectional = bidirectional
 		self.dropout_factor_ulmfit = dropout_factor_ulmfit
 
-		extra_emb_dim = 0
-		if use_bert:
-			self.bert_embedding = WordEmbeddings('glove') #BertEmbeddings('distilbert-base-uncased-distilled-squad', layers='-1')
-
-			# self.bert_embedding = FlairEmbeddings('news-forward')
-			extra_emb_dim += 100
-
-		embed_size += extra_emb_dim
 		if encoder_type.lower() == 'gru':
 			word_out = 2* word_hidden if bidirectional else word_hidden
 			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
@@ -184,27 +180,12 @@ class AttentionWordEncoder(nn.Module):
 		else: # Regular word embeddings flow
 			# embeddings
 			x_emb = self.lookup(x)
-			N,B,d_c = x_emb.shape
-
-			if self.use_bert: # Get extra embeddings
-
-				# self.bert_embedding.embed(text)
-				[self.bert_embedding.embed(t) for t in chunker(text, 10**6)]
-				# t = [tok.embedding for tok in text[0]]
-				extra_embeddings = [torch.stack([tok.embedding for tok in sen]) for sen in text]
-				extra_embeddings, _ = stack_and_pad_tensors(extra_embeddings)
-				extra_embeddings = extra_embeddings.to(x_emb.device)
-
-				x_emb = torch.cat([x_emb, extra_embeddings.permute(1,0,2)],dim=2)
-
 
 			if self.encoder_type.lower() == 'gru':
-				x1, _ = self.word_encoder(self.drop1(x_emb))
+				x1, _ = self.word_encoder(self.drop1(x_emb.permute(1,0,2)))
 			elif self.encoder_type.lower() == 'transformer':
 				x1 = self.word_encoder(self.drop1(x_emb))
-				# x1 = x1.permute(1,0,2)
-			elif self.encoder_type.lower() == 'ulmfit':
-				x1 = self.word_encoder(x)
+
 		# compute attention
 		Hw = torch.tanh(self.weight_W_word(x1))
 		Hw = Hw + x1  # residual connection
@@ -611,6 +592,8 @@ class CapsNet_Text(nn.Module):
 		return poses, activations
 
 	def reconstruction_loss(self, doc_enc, input, size_average=True):
+		# Simply return 0 when no reconstruction loss is considered
+		if self.recon_error_lambda == 0: return 0
 		# Get the lengths of capsule outputs.
 		# input = self.bn(input)
 		v_mag = torch.sqrt((input ** 2).sum(dim=2))

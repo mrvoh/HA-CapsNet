@@ -1,7 +1,7 @@
 # from torchnlp.word_to_vector import FastText
 from torchnlp.datasets import Dataset
 from torchnlp.samplers import BucketBatchSampler
-from torchnlp.encoders.text import stack_and_pad_tensors
+from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 from torch.utils.data import DataLoader
 import torch
 # import nltk
@@ -15,7 +15,10 @@ from data_utils.json_loader import JSONLoader
 import operator
 import pickle
 from collections import Counter
-import fasttext
+try:
+	import fasttext
+except:
+	print('WARNING: Fasttext module not loaded.')
 
 # UNK = '<UNK>'
 # PAD = '<PAD>'
@@ -110,31 +113,37 @@ def _convert_word_to_idx(word, word_to_idx, word_counter=None, min_freq=None, un
 		# map to <UNK>
 		return word_to_idx[unk]
 
-def doc_to_sample(doc, label_to_idx, word_to_idx, word_counter=None, min_freq_word=50):
+def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_freq_word=50, unk='<UNK>', stoi = None, tag_counter = None, label_value = 1.0):
+
+	n_labels = len(label_to_idx)
 	sample = {}
 	# collect tags
 	tags = [int(label_to_idx[tag]) for tag in doc.tags]
+	if tag_counter: # Keep track of #occurrences of each tag
+		tag_counter.update(tags)
 	# convert sentences to indices of words
-	sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word) for w in sent]) for
-			 sent in doc.sentences]
+	if stoi:  # preloaded word to idx, no need to update it
+		sents = [torch.LongTensor([stoi.get(w, stoi[unk]) for w in sent]) for sent in doc.sentences]
+	else:
+		sents = [
+			torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for
+			sent in doc.sentences]
 
 	# convert to tensors
-	sample['tags'] = np.zeros(len(label_to_idx))
-	sample['tags'][tags] = 1
+	sample['tags'] = np.zeros(n_labels)
+	sample['tags'][tags] = label_value
 	sample['tags'] = torch.FloatTensor(sample['tags'])  # One Hot Encoded target
-	sents, sents_len = stack_and_pad_tensors(sents)
-	sample['sents'] = sents  # , _ =
-	sample['sents_len'] = sents_len
-	sample['doc_len'] = len(sents)
+	sample['sents'] = sents  # , _ = stack_and_pad_tensors(sents)
 
-	return sample
+	sample['encoding'] = torch.FloatTensor(doc.encoding)
+
+	return sample, tag_counter
 
 
-def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50):
+def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk='<UNK>',pad='<PAD>', pad_idx=0, unk_idx=1, min_freq_word=50, label_value = 1.0):
 	""""
 		Process list of docs into Pytorch-ready dataset
 	"""
-	n_labels = len(label_to_idx)
 	dset = []
 	tag_counter = Counter()
 	stoi = None
@@ -151,23 +160,8 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 
 	print('Loading and converting docs to PyTorch backend...')
 	for doc in docs:
-		sample = {}
-		# collect tags
-		tags = [int(label_to_idx[tag]) for tag in doc.tags]
-		tag_counter.update(tags)
-		# convert sentences to indices of words
-		if stoi: # preloaded word to idx, no need to update it
-			sents = [torch.LongTensor([stoi.get(w, stoi[unk]) for w in sent]) for sent in doc.sentences]
-		else:
-			sents = [torch.LongTensor([_convert_word_to_idx(w, word_to_idx, word_counter, min_freq_word, unk) for w in sent]) for sent in doc.sentences]
-
-		# convert to tensors
-		sample['tags'] = np.zeros(n_labels)
-		sample['tags'][tags] = 1
-		sample['tags'] = torch.FloatTensor(sample['tags']) # One Hot Encoded target
-		sample['sents'] = sents #, _ = stack_and_pad_tensors(sents)
-
-		sample['encoding'] = torch.FloatTensor(doc.encoding)
+		sample, tag_counter = doc_to_sample(doc, label_to_idx, word_to_idx, word_counter, stoi=stoi, min_freq_word= min_freq_word,
+											unk=unk, tag_counter=tag_counter, label_value=label_value)
 
 		dset.append(sample)
 
@@ -175,31 +169,29 @@ def process_dataset(docs, label_to_idx, word_to_idx=None, word_counter=None,unk=
 
 # Collate function
 def collate_fn_rnn(batch):
-
-	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
-	doc_lens_batch = [len(doc['sents']) for doc in batch]
-
-
-	# tokens_batch, _ = stack_and_pad_tensors([doc['tokens'] for doc in batch])
-	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
-
-	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-	sents_batch = sents_batch.to(device)
-	sents_len_batch = sents_len_batch.to(device)
-	# doc_lens_batch = doc_lens_batch.to(device)
-	tags_batch = tags_batch.to(device)
-
-	# PyTorch RNN requires batches to be transposed for speed and integration with CUDA
+	# # PyTorch RNN requires batches to be transposed for speed and integration with CUDA
 	transpose = (lambda b: b.t_().squeeze(0).contiguous())
 
-	if 'encoding' in batch[0].keys():
+	# Shape tensors in right format
+	sents_len_batch = [[len(sent) for sent in doc['sents']] for doc in batch]
+	max_sent_len = max([max(s) for s in sents_len_batch])
+	sents_batch, doc_lens_batch = stack_and_pad_tensors(
+		[torch.stack([pad_tensor(sent, max_sent_len) for sent in doc['sents']]) for doc in batch])
+	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
+
+	# Move to device
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+	sents_batch = sents_batch.to(device)
+	tags_batch = tags_batch.to(device)
+
+	if 'encoding' in batch[0].keys():  # add doc encoding if applicable
 		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
-		return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch, encoding_batch)
+		return (sents_batch, tags_batch, encoding_batch)
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
-	return (transpose(sents_batch), sents_len_batch, doc_lens_batch, tags_batch)
+	return (sents_batch, tags_batch, None)
 
-def collate_fn_transformer(batch):
+def collate_fn_transformer1(batch):
 
 	# test = [sent for doc in batch for sent in doc['sents']]
 	sents_batch, sents_len_batch = stack_and_pad_tensors([sent for doc in batch for sent in doc['sents']])
@@ -211,7 +203,7 @@ def collate_fn_transformer(batch):
 	# sents_len_batch = stack_and_pad_tensors([doc['sen_lens'] for doc in batch])
 	# word_len_batch, _ = stack_and_pad_tensors([seq['word_len'] for seq in batch])
 
-	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 	sents_batch = sents_batch.to(device)
 	sents_len_batch = sents_len_batch.to(device)
 	# doc_lens_batch = doc_lens_batch.to(device)
@@ -223,6 +215,28 @@ def collate_fn_transformer(batch):
 
 	# return (word_ids_batch, seq_len_batch, label_batch)
 	return (sents_batch, sents_len_batch, doc_lens_batch, tags_batch)
+
+
+
+def collate_fn_transformer(batch): #multigpu implementation
+
+	# Shape tensors in right format
+	sents_len_batch = [[len(sent) for sent in doc['sents']] for doc in batch]
+	max_sent_len = max([max(s) for s in sents_len_batch])
+	sents_batch, doc_lens_batch = stack_and_pad_tensors([torch.stack([pad_tensor(sent, max_sent_len) for sent in doc['sents']]) for doc in batch])
+	tags_batch, _ = stack_and_pad_tensors([doc['tags'] for doc in batch])
+
+	# Move to device
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+	sents_batch = sents_batch.to(device)
+	tags_batch = tags_batch.to(device)
+
+	if 'encoding' in batch[0].keys(): # add doc encoding if applicable
+		encoding_batch = torch.stack([doc['encoding'] for doc in batch]).to(device)
+		return (sents_batch, tags_batch, encoding_batch)
+
+	# return (word_ids_batch, seq_len_batch, label_batch)
+	return (sents_batch, tags_batch, None)
 
 
 # Get dataloader

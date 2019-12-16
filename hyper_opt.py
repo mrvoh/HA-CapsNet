@@ -117,7 +117,7 @@ if __name__ == '__main__':
 	config_path = 'parameters.ini'
 
 	# data settings
-	data_path = r'dataset\reuters-full\train.pkl'
+	data_path = r'dataset/reuters-full/train.pkl'
 	label_to_idx_path = r'dataset\reuters-full\label_to_idx.json'
 
 

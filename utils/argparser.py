@@ -29,6 +29,10 @@ def get_parser():
 						required=True,
 						type=int,
 						help="Total batch size for eval.")
+	parser.add_argument("--label_value",
+						required=True,
+						type=float,
+						help="Ground truth label value against which to compute loss.")
 	parser.add_argument("--learning_rate",
 						required=True,
 						type=float,
