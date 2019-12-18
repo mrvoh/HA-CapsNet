@@ -18,6 +18,7 @@ from data_utils.data_utils import process_dataset, get_data_loader, embeddings_f
 from text_class_learner import MultiLabelTextClassifier
 # from data_utils.eur_lex57k_to_doc import parse as eur_lex_parse
 from data_utils.reuters_to_doc import parse as reuters_parse
+from data_utils.imdb_to_doc import parse as imdb_parse
 from data_utils.csv_to_documents import sheet_to_docs as parse_sheet
 from model import FastTextLearner
 from layers import ULMFiTEncoder
@@ -92,6 +93,10 @@ def main():
 	if args.preprocess_all:
 		if args.dataset_name.lower() == 'reuters':
 			reuters_parse(args.write_data_dir, args.percentage_train, use_ulmfit=args.word_encoder.lower() == 'ulmfit',
+						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
+		if args.dataset_name.lower() == 'imdb':
+			imdb_parse(args.write_data_dir, args.percentage_train,
+						  use_ulmfit=args.word_encoder.lower() == 'ulmfit',
 						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
 		elif args.dataset_name.lower() == 'eur-lex57k':
 			label_to_idx_path, train_path, dev_path, test_path = \
@@ -221,7 +226,8 @@ def main():
 									  dim_caps=args.dim_caps, num_caps=args.num_caps,
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
-									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps)
+									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps,
+									  binary_class=args.binary_class)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

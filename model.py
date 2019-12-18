@@ -350,5 +350,11 @@ class HCapsNetMultiHeadAtt(nn.Module):
 
 
 class MyDataParallel(nn.DataParallel):
+    def __init__(self, model):
+        super(MyDataParallel, self).__init__(model)
+
     def __getattr__(self, name):
-        return getattr(self.module, name)
+        try:
+            return super(MyDataParallel, self).__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)

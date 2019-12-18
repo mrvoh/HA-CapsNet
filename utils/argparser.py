@@ -142,7 +142,7 @@ def get_parser():
 						action='store_false',
 						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
 	parser.add_argument("--dataset_name",
-						default='reuters',
+						default='imdb',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
@@ -155,7 +155,7 @@ def get_parser():
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",
-						default='dataset\\regminer',
+						default='dataset\\imdb-full',
 						type=str,
 						required=False,
 						help="Where to write the parsed data to.")
