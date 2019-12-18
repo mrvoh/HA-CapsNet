@@ -30,7 +30,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 		docs = [Document(text=doc['text'],
 						 text_preprocessor = text_preprocessor,
 						 filename = 'test',
-						 tags=doc['sentiment'],
+						 tags=[doc['sentiment'] ] if doc['sentiment'] == 'pos' else [],
 						 restructure_doc=restructure_doc,
 						 split_size_long_seqs=max_seq_len)
 				for doc in tqdm(dataset)]
@@ -40,7 +40,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 
 
 	# Get label_mapping
-	label_to_idx = {'neg':0, 'pos':1}
+	label_to_idx = {'pos':0}
 
 	label_to_idx_path = os.path.join(out_dir, 'label_to_idx.json')
 	with open(label_to_idx_path, 'w', encoding='utf-8') as f:
