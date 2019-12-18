@@ -1,8 +1,10 @@
 from hyperopt import hp, tpe, fmin, Trials, STATUS_OK
 import numpy as np
+import os
 import pickle
 from data_utils.csv_to_documents import docs_to_sheet
 from skmultilearn.model_selection import IterativeStratification
+import argparse
 import configparser
 import gc
 from collections import OrderedDict
@@ -104,21 +106,71 @@ def objective(params):
 
 if __name__ == '__main__':
 
+	parser = argparse.ArgumentParser()
+
+	parser.add_argument("--max_evals",
+						default=100,
+						type=int,
+						help="Total nr of optimization steps.")
+	parser.add_argument("--K",
+						default=3,
+						type=int,
+						help="Number of splits for cross validation")
+	parser.add_argument("--preload_trials",
+						action='store_true',
+						help="Whether to preload an existing trials object.")
+	parser.add_argument("--in_trials_path",
+						default='trials.pkl',
+						type=str,
+						required=False,
+						help="Path of trials object to read in.")
+	parser.add_argument("--out_trials_path",
+						default='trials.pkl',
+						type=str,
+						required=False,
+						help="Path of trials object save.")
+	# parser.add_argument("--in_trials_path",
+	# 					default='trials.pkl',
+	# 					type=str,
+	# 					required=False,
+	# 					help="Path of trials object to read in.")
+	parser.add_argument("--log_path",
+						default='opt_log.txt',
+						type=str,
+						required=False,
+						help="The path where to dump logging.")
+	parser.add_argument("--config_path",
+						default='parameters.ini',
+						type=str,
+						required=False,
+						help="Path from where to read the config for training.")
+	parser.add_argument("--data_path",
+						default=os.path.join('dataset','reuters-full','train.pkl'),
+						type=str,
+						required=False,
+						help="The path where to dump logging.")
+	parser.add_argument("--label_to_idx_path",
+						default=os.path.join('dataset', 'reuters-full', 'label_to_idx.json'),
+						type=str,
+						required=False,
+						help="The path where to dump logging.")
+
+	args = parser.parse_args()
 	###########################################
 	# INPUT VARIABLES
 	###########################################
 	# optim settings
-	max_evals = 100
-	preload_trials = False
-	in_trials_path = 'trials.pkl'
-	out_trials_path = 'trials.pkl'
-	log_path = 'opt_log.txt'
-	K = 3
-	config_path = 'parameters.ini'
+	max_evals = args.max_evals
+	preload_trials = args.preload_trials
+	in_trials_path = args.in_trials_path
+	out_trials_path = args.in_trials_path
+	log_path = args.log_path
+	K = args.K
+	config_path = args.config_path
 
 	# data settings
-	data_path = r'dataset/reuters-full/train.pkl'
-	label_to_idx_path = r'dataset\reuters-full\label_to_idx.json'
+	data_path = args.data_path
+	label_to_idx_path = args.label_to_idx_path
 
 
 
