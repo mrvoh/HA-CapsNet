@@ -40,7 +40,7 @@ def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 3
 		docs = pickle.load(f)
 
 	# Write docs to temporary *.txt file for fasttext to train on
-	with open('tmp.txt', 'w') as f:
+	with open('tmp.txt', 'w', encoding='utf-8') as f:
 		for doc in docs:
 			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
 

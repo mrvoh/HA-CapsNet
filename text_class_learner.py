@@ -330,6 +330,8 @@ class MultiLabelTextClassifier:
 			else: # Other models
 				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents) # rec loss defaults to 0 for non-CapsNet models
 
+			if torch.cuda.device_count() > 1:
+				rec_loss = rec_loss.mean()
 			loss = criterion(preds, target)
 			loss += rec_loss
 			tr_loss += loss.item()
@@ -356,12 +358,12 @@ class MultiLabelTextClassifier:
 
 		write_path = os.path.join('class_reports', '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
-			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
+			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K)
 
 		# Eval Train
 		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
-			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K,
-																	max_samples=len(dataloader_dev))
+			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K)
+																	# max_samples=len(dataloader_dev))
 
 		# Save model if best
 		if best_score < f1_micro_dev:
@@ -404,7 +406,7 @@ class MultiLabelTextClassifier:
 
 		return best_score, best_loss
 
-	def eval_dataset(self, dataloader, K=5, max_samples=None, write_path = None):
+	def eval_dataset(self, dataloader, K=0, max_samples=250, write_path = None):
 		self.logger.info("Evaluating model")
 		self.model.eval()
 		y_pred = []
@@ -441,19 +443,19 @@ class MultiLabelTextClassifier:
 		self.logger.info("Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
-		for i in range(1, K + 1):
-			r_k = mean_recall_k(y_true,
-								y_pred, k=i)
-			p_k = mean_precision_k(y_true,
-								   y_pred, k=i)
-			rp_k = mean_rprecision_k(y_true,
-									 y_pred, k=i)
-			ndcg_k = mean_ndcg_score(y_true,
-									 y_pred, k=i)
+		# for i in range(1, K + 1):
+		# 	r_k = mean_recall_k(y_true,
+		# 						y_pred, k=i)
+		# 	p_k = mean_precision_k(y_true,
+		# 						   y_pred, k=i)
+		# 	rp_k = mean_rprecision_k(y_true,
+		# 							 y_pred, k=i)
+		# 	ndcg_k = mean_ndcg_score(y_true,
+		# 							 y_pred, k=i)
+		#
+		# 	f1_k = (2*r_k*p_k)/(r_k+p_k)
+		# 	self.logger.info(template.format(i, f1_k, r_k, p_k, rp_k, ndcg_k))
+		# self.logger.info('----------------------------------------------------')
 
-			f1_k = (2*r_k*p_k)/(r_k+p_k)
-			self.logger.info(template.format(i, f1_k, r_k, p_k, rp_k, ndcg_k))
-		self.logger.info('----------------------------------------------------')
-
-		return r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro
-
+		# return r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro
+		return 0,0,0,0, avg_loss, hamming, emr, f1_micro, f1_macro
