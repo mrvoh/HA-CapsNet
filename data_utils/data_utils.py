@@ -40,7 +40,7 @@ def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 3
 		docs = pickle.load(f)
 
 	# Write docs to temporary *.txt file for fasttext to train on
-	with open('tmp.txt', 'w') as f:
+	with open('tmp.txt', 'w', encoding='utf-8') as f:
 		for doc in docs:
 			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
 
@@ -132,10 +132,12 @@ def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_f
 	# convert to tensors
 	sample['tags'] = np.zeros(n_labels)
 	sample['tags'][tags] = label_value
+
 	sample['tags'] = torch.FloatTensor(sample['tags'])  # One Hot Encoded target
 	sample['sents'] = sents  # , _ = stack_and_pad_tensors(sents)
 
-	sample['encoding'] = torch.FloatTensor(doc.encoding)
+	if doc.encoding is not None:
+		sample['encoding'] = torch.FloatTensor(doc.encoding)
 
 	return sample, tag_counter
 
