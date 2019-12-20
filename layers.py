@@ -91,6 +91,29 @@ class ULMFiTEncoder(nn.Module):
 
 		self.ulmfit = lm #next(lm.modules())[0]
 
+		self.layer_map = stop_map = {
+			0:10, # lstm layer 3
+			1:8, # lstm layer 2
+			2:6, # lstm layer 1
+			3:0 # all
+		}
+
+	def get_layer_params(self, l):
+
+		assert 0 <= l <= 3, "Ulmfit consists of only 4 layers, choose l between 0 and 3"
+		assert isinstance(l, int), "Please give an integer value for l"
+		#TODO: return all params of layer l such that specific lr can be set
+
+		all_modules = list(self.ulmfit.modules())
+
+		if l == 0:
+			params = [mod.parameters() for mod in all_modules[self.layer_map[l]:]]
+		else:
+			params = [mod.parameters() for mod in all_modules[self.layer_map[l]:self.layer_map[l-1]]]
+
+		params = [p for mod in params for p in mod]
+		return params
+
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
 		stop_map = {

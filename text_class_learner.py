@@ -207,14 +207,28 @@ class MultiLabelTextClassifier:
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
-		self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+
 
 		# Load embeddings
 		if word_encoder.lower() != 'ulmfit':
+			# initialize optimizer
+			self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+			# get word embeddings
 			vectors = fasttext.load_model(vector_path)
 
 			embed_table = get_embedding(vectors, self.word_to_idx, embed_dim)
 			self.model.set_embedding(embed_table)
+		else:
+			# intialize per-layer lr for ULMFiT
+			eta = 2.6 # from ULMFiT paper
+			num_layers = 4
+			self.optimizer = RAdam(
+			[
+				{"params": self.model.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
+			],
+			lr = self.lr,  weight_decay=self.weight_decay)
+
 
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")

@@ -5,6 +5,18 @@ import os
 import pickle
 from tqdm import tqdm
 import json
+import re
+import html
+
+re1 = re.compile(r'  +')
+
+def fixup(x):
+    x = x.replace('#39;', "'").replace('amp;', '&').replace('#146;', "'").replace(
+        'nbsp;', ' ').replace('#36;', '$').replace('\\n', "\n").replace('quot;', "'").replace(
+        '<br />', "\n").replace('\\"', '"').replace('<unk>','u_n').replace(' @.@ ','.').replace(
+        ' @-@ ','-').replace('\\', ' \\ ')
+    return re1.sub(' ', html.unescape(x))
+
 
 def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, use_ulmfit=False):
 
@@ -27,7 +39,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	for dataset, name in [(train, 'train'), (dev, 'dev'), (test, 'test')]:
 		if len(dataset) == 0:
 			continue
-		docs = [Document(text=doc['text'],
+		docs = [Document(text=fixup(doc['text']),
 						 text_preprocessor = text_preprocessor,
 						 filename = 'test',
 						 tags=[doc['sentiment'] ] if doc['sentiment'] == 'pos' else [],
