@@ -13,6 +13,17 @@ from textblob.translate import NotTranslated
 from fastai.text.transform import Tokenizer as ULMFiTTokenizer
 from fastai.text.transform import SpacyTokenizer
 
+import html
+
+re1 = re.compile(r'  +')
+
+def fixup(x):
+    x = x.replace('#39;', "'").replace('amp;', '&').replace('#146;', "'").replace(
+        'nbsp;', ' ').replace('#36;', '$').replace('\\n', "\n").replace('quot;', "'").replace(
+        '<br />', "\n").replace('\\"', '"').replace('<unk>','u_n').replace(' @.@ ','.').replace(
+        ' @-@ ','-').replace('\\', ' \\ ')
+    return re1.sub(' ', html.unescape(x))
+
 # language mapping for backtranslation
 LANG_MAP= {
     'af': 'afrikaans',
@@ -236,11 +247,12 @@ class TextPreprocessor(object):
 			self.s = SpacyTokenizer(lang) # used by ulmfit tokenizer
 
 	def tokenize_text(self, text: str):
-
+		text = fixup(text)
 		if not self.ulmfit_preprocessing: # standard preprocessing
 			text = lowercase_and_remove_accent(text)
 			text = remove_non_printing_char(text)
 			text = replace_unicode_punct(text)
+
 		else: # ULMFiT-specific preprocessing
 			text = ' '.join(self.ulmfit_tokenizer.process_text(text, self.s))
 

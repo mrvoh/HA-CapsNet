@@ -74,7 +74,7 @@ class MultiLabelTextClassifier:
 
 	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
 				 tensorboard_dir = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
-				 dropout = 0.1, K=5, verbose=True, **kwargs):
+				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
 
 		self.model_name = model_name
 		self.use_doc_encoding = 'caps' in model_name.lower()
@@ -96,6 +96,8 @@ class MultiLabelTextClassifier:
 		self.min_freq_word = min_freq_word
 		self.K = K
 		self.verbose = verbose
+		self.gradual_unfreeze = gradual_unfeeze
+		self.keep_ulmfit_frozen = keep_ulmfit_frozen
 
 		# Placeholders for attributes to be initialized
 		# TODO: use kwarg arguments downstream  --> or just keep for load method?
@@ -223,12 +225,27 @@ class MultiLabelTextClassifier:
 			# intialize per-layer lr for ULMFiT
 			eta = 2.6 # from ULMFiT paper
 			num_layers = 4
-			self.optimizer = RAdam(
-			[
-				{"params": self.model.sent_encoder.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
-			],
-			lr = self.lr,  weight_decay=self.weight_decay)
+			lr_div_factor = 10
 
+			params = [
+				{'params':self.sent_encoder.word_encoder.params(), 'lr':self.lr/lr_div_factor},
+				{'params':self.model.caps_classifier.parameters()},
+				{'params':self.model.doc_encoder.parameters()},
+				{'params':self.model.sent_encoder.weight_W_word.parameters()},
+				{'params':self.model.sent_encoder.weight_proj_word.parameters()},
+				{'params': self.model.sent_encoder.weight_proj_word.parameters()},
+
+			]
+
+			# ulmfit_params = list(self.model.sent_encoder.word_encoder.parameters())
+			# params = [{"params":[p for p in self.model.parameters() if not any([p.equal(up) for up in ulmfit_params])]}]
+			# params.extend([
+			# 	{"params": self.model.sent_encoder.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
+			# ])
+			self.optimizer = RAdam(params, lr = self.lr,  weight_decay=self.weight_decay)
+
+		if self.keep_ulmfit_frozen: # Freeze ulmfit completely
+			self.model.sent_encoder.word_encoder.freeze_to(-1)
 
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -320,7 +337,7 @@ class MultiLabelTextClassifier:
 		for epoch in range(num_epochs):
 			torch.cuda.empty_cache()
 			self.logger.info("Epoch: {}".format(epoch))
-			if (self.word_encoder.lower() == 'ulmfit') and (epoch <= to_freeze):
+			if (self.word_encoder.lower() == 'ulmfit') and (epoch <= to_freeze) and self.gradual_unfreeze and not self.keep_ulmfit_frozen:
 				self.model.sent_encoder.word_encoder.freeze_to(epoch)
 
 			# continue

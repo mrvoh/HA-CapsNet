@@ -109,13 +109,13 @@ class ULMFiTEncoder(nn.Module):
 		all_modules.pop(2)  # remove LSTM Module List
 
 		if l == 0:
-			params = [mod.parameters() for mod in all_modules[self.layer_map[l]:]]
+			params = [mod.parameters(recurse=False) for mod in all_modules[self.layer_map[l]:]]
 		else:
-			params = [mod.parameters() for mod in all_modules[self.layer_map[l]:self.layer_map[l-1]]]
+			params = [mod.parameters(recurse=False) for mod in all_modules[self.layer_map[l]:self.layer_map[l-1]]]
 
 		params = [p for mod in params for p in mod]
 
-		other_params  = [mod.parameters() for mod in all_modules[:self.layer_map[l]]]
+		other_params  = [mod.parameters(recurse=False) for mod in all_modules[:self.layer_map[l]]]
 		other_params = [p for mod in other_params for p in mod]
 		p = [param for param in params if not any([param.equal(p) for p in other_params])]
 		return p
@@ -123,6 +123,7 @@ class ULMFiTEncoder(nn.Module):
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
 		stop_map = {
+			-1:10**6,
 			0:10, # lstm layer 3
 			1:8, # lstm layer 2
 			2:6, # lstm layer 1

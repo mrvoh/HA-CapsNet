@@ -218,7 +218,8 @@ def main():
 													  word_to_idx_path=args.word_to_idx_path,
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
-													  lr=args.learning_rate)
+													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
+													  keep_ulmfit_frozen= args.keep_frozen)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,

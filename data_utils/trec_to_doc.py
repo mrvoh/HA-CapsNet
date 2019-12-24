@@ -1,4 +1,4 @@
-from torchnlp.datasets import imdb_dataset
+from torchnlp.datasets import trec_dataset
 from document_model import Document, TextPreprocessor
 from random import shuffle
 import os
@@ -14,12 +14,12 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 	# retrieve data and create splits
-	train_full = imdb_dataset(train=True)
+	train_full = trec_dataset(train=True)
 	shuffle(train_full)
 	train = train_full[:int(percentage_train*len(train_full))]
 	dev = train_full[int(percentage_train*len(train_full)):]
 	del train_full
-	test = imdb_dataset(test=True)
+	test = trec_dataset(test=True)
 	# initiate text preprocessor
 
 	text_preprocessor = TextPreprocessor(use_ulmfit)

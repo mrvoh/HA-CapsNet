@@ -96,7 +96,12 @@ def get_parser():
 	parser.add_argument("--dropout_factor",
 						type=float,
 						help="Multiplier for standard dropout values in ULMFiT.")
-
+	parser.add_argument("--gradual_unfreeze",
+						action='store_true',
+						help="Unfreeze ULMFiT one layer per epoch.")
+	parser.add_argument("--keep_frozen",
+						action='store_true',
+						help="Keep ULMFiT weights static over course of training.")
 	# caps net options
 	parser.add_argument("--dim_caps",
 						type=int,
