@@ -105,6 +105,8 @@ class ULMFiTEncoder(nn.Module):
 		#TODO: return all params of layer l such that specific lr can be set
 
 		all_modules = list(self.ulmfit.modules())
+		all_modules.pop(0) # remove AWD LSTM container
+		all_modules.pop(2)  # remove LSTM Module List
 
 		if l == 0:
 			params = [mod.parameters() for mod in all_modules[self.layer_map[l]:]]
@@ -112,7 +114,11 @@ class ULMFiTEncoder(nn.Module):
 			params = [mod.parameters() for mod in all_modules[self.layer_map[l]:self.layer_map[l-1]]]
 
 		params = [p for mod in params for p in mod]
-		return params
+
+		other_params  = [mod.parameters() for mod in all_modules[:self.layer_map[l]]]
+		other_params = [p for mod in other_params for p in mod]
+		p = [param for param in params if not any([param.equal(p) for p in other_params])]
+		return p
 
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
@@ -146,7 +152,7 @@ class ULMFiTEncoder(nn.Module):
 		# manually reset the hidden states
 		self.ulmfit.reset()
 
-		h, c = self.ulmfit(x)
+		h, c = self.ulmfit(x) 
 
 		x = h[-1]#[:,-1,:] # final hidden state
 		x = self.ln(x)

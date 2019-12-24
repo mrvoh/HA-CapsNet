@@ -225,7 +225,7 @@ class MultiLabelTextClassifier:
 			num_layers = 4
 			self.optimizer = RAdam(
 			[
-				{"params": self.model.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
+				{"params": self.model.sent_encoder.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
 			],
 			lr = self.lr,  weight_decay=self.weight_decay)
 
@@ -372,7 +372,7 @@ class MultiLabelTextClassifier:
 
 		write_path = os.path.join('class_reports', '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
-			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K)
+			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
 
 		# Eval Train
 		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
