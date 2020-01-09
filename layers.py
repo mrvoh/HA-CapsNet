@@ -515,7 +515,7 @@ class FCCaps(nn.Module):
 		self.is_AKDE = is_AKDE
 		self.sigmoid = nn.Sigmoid()
 
-	def forward(self, x ):
+	def forward(self, x):
 		batch_size = x.size(0)
 
 		W1 = self.W1

@@ -64,7 +64,7 @@ def get_parser():
 						required=True,
 						help="Model to use. Options: HAN, HGRULWAN, HCapsNet & HCapsNetMultiHeadAtt")
 	parser.add_argument("--binary_class",
-						action='store_false',
+						action='store_true',
 						help="Whether model dataset as multi-class classification(cross-entropy based) or multi-label classification (multiple binary classification).")
 	parser.add_argument("--use_glove",
 						action='store_true',
@@ -152,11 +152,11 @@ def get_parser():
 						required=False,
 						help="Name of the dataset.")
 	parser.add_argument("--percentage_train",
-						default=1.0,
+						default=0.8,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--percentage_dev",
-						default=0.0,
+						default=0.2,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",

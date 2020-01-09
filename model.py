@@ -176,7 +176,7 @@ class HGRULWAN(nn.Module):
 
 
 class HCapsNet(nn.Module):
-    def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
+    def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, binary_class = True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100,
                  dropout_caps = 0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0,**kwargs):
         super(HCapsNet, self).__init__()
@@ -188,8 +188,9 @@ class HCapsNet(nn.Module):
         self.n_classes = num_classes
         self.word_hidden = word_hidden
         self.bidirectional = bidirectional
-        self.word_encoder = word_encoder
-        self.sent_encoder = sent_encoder
+        self.binary_class = binary_class
+        # self.word_encoder = word_encoder
+        # self.sent_encoder = sent_encoder
         self.dropout = dropout
         self.lambda_reg_caps = lambda_reg_caps
 
@@ -225,6 +226,7 @@ class HCapsNet(nn.Module):
         params.update(
             {
                 "model_name":"HCapsNet",
+                "binary_class":self.binary_class,
                 "num_caps":self.caps_classifier.num_caps,
                 "dim_caps":self.caps_classifier.dim_caps,
                 "lambda_reg_caps":self.lambda_reg_caps,
@@ -256,6 +258,9 @@ class HCapsNet(nn.Module):
         doc_encoding = doc_encoding.unsqueeze(1)
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
+
+        if not self.binary_class: # convert probs to log probs
+            activations = torch.log(activations)
 
         if encoding is None:
             return activations, word_attn_weight, sent_attn_weight, 0

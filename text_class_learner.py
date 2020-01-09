@@ -74,7 +74,7 @@ class MultiLabelTextClassifier:
 
 	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
 				 tensorboard_dir = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
-				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
+				 dropout = 0.1, K=5, verbose=True, do_save = True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
 
 		self.model_name = model_name
 		self.use_doc_encoding = 'caps' in model_name.lower()
@@ -98,6 +98,7 @@ class MultiLabelTextClassifier:
 		self.verbose = verbose
 		self.gradual_unfreeze = gradual_unfeeze
 		self.keep_ulmfit_frozen = keep_ulmfit_frozen
+		self.do_save = do_save
 
 		# Placeholders for attributes to be initialized
 		# TODO: use kwarg arguments downstream  --> or just keep for load method?
@@ -109,7 +110,7 @@ class MultiLabelTextClassifier:
 		self.sent_encoder = kwargs.get('sent_encoder', None)
 		self.pretrained_path = kwargs.get('pretrained_path', None)
 		self.ulmfit_pretrained_path = kwargs.get('ulmfit_pretrained_path', None)
-		self.optimizer = kwargs.get('optimizer', None)
+		self.binary_class = kwargs.get('binary_class', True)
 		self.criterion = kwargs.get('criterion', None)
 
 		# Other attributes
@@ -135,7 +136,7 @@ class MultiLabelTextClassifier:
 
 	@classmethod
 	def load(cls, path):
-		params = torch.load(path, map_location=torch.device('gpu' if torch.cuda.is_available() else 'cpu'))
+		params = torch.load(path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
 		params_no_weight = {k:v for k,v in params.items() if k != 'state_dict'}
 
 		self = cls(**params_no_weight)
@@ -161,6 +162,9 @@ class MultiLabelTextClassifier:
 
 		return self
 
+	def _get_criterion(self):
+		None
+
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
 				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True):
@@ -172,6 +176,7 @@ class MultiLabelTextClassifier:
 		self.word_encoder = word_encoder
 		self.sent_encoder = sent_encoder
 		self.ulmfit_pretrained_path = ulmfit_pretrained_path
+		self.binary_class = binary_class
 
 		# Initialize model and load pretrained weights if given
 		self.logger.info("Building model...")
@@ -187,13 +192,13 @@ class MultiLabelTextClassifier:
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
 								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit,
-								  	lambda_reg_caps = lambda_reg_caps)
+								  	lambda_reg_caps = lambda_reg_caps, binary_class = binary_class)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
 									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit,
-									lambda_reg_caps = lambda_reg_caps)
+									lambda_reg_caps = lambda_reg_caps, binary_class = binary_class)
 
 		if binary_class:
 			# Initialize training attributes
@@ -205,7 +210,8 @@ class MultiLabelTextClassifier:
 				self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 		else:
 			if 'caps' in self.model_name.lower():
-				self.criterion = torch.nn.NLLLoss()
+				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
+				# self.criterion = torch.nn.NLLLoss()
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
@@ -228,13 +234,11 @@ class MultiLabelTextClassifier:
 			lr_div_factor = 10
 
 			params = [
-				{'params':self.sent_encoder.word_encoder.params(), 'lr':self.lr/lr_div_factor},
+				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/lr_div_factor},
 				{'params':self.model.caps_classifier.parameters()},
 				{'params':self.model.doc_encoder.parameters()},
 				{'params':self.model.sent_encoder.weight_W_word.parameters()},
-				{'params':self.model.sent_encoder.weight_proj_word.parameters()},
-				{'params': self.model.sent_encoder.weight_proj_word.parameters()},
-
+				{'params':self.model.sent_encoder.weight_proj_word}
 			]
 
 			# ulmfit_params = list(self.model.sent_encoder.word_encoder.parameters())
@@ -356,6 +360,8 @@ class MultiLabelTextClassifier:
 			optimizer.zero_grad()
 
 			(sents, target, doc_encoding) = batch
+			if not self.binary_class:
+				target = target.squeeze(1)
 			if self.use_doc_encoding: # Capsule based models
 				preds, word_attention_scores, sent_attention_scores, rec_loss = self.model(sents, doc_encoding)
 			else: # Other models
@@ -397,7 +403,7 @@ class MultiLabelTextClassifier:
 																	# max_samples=len(dataloader_dev))
 
 		# Save model if best
-		if best_score < f1_micro_dev:
+		if best_score <= f1_micro_dev and self.do_save:
 			best_score = f1_micro_dev
 
 			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
@@ -449,6 +455,8 @@ class MultiLabelTextClassifier:
 			for batch_idx, batch in enumerate(dataloader):
 
 				(sents, target, doc_encoding) = batch
+				if not self.binary_class:
+					target = target.squeeze(1)
 
 				if self.use_doc_encoding:  # Capsule based models
 					preds = self.model(sents, doc_encoding)[0]

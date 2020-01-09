@@ -18,6 +18,9 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	shuffle(train_full)
 	train = train_full[:int(percentage_train*len(train_full))]
 	dev = train_full[int(percentage_train*len(train_full)):]
+
+	# Get label mapping
+	label_to_idx = {k:ix for ix,k in enumerate(set([doc['label'] for doc in train_full]))}
 	del train_full
 	test = trec_dataset(test=True)
 	# initiate text preprocessor
@@ -30,17 +33,13 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 		docs = [Document(text=doc['text'],
 						 text_preprocessor = text_preprocessor,
 						 filename = 'test',
-						 tags=[doc['sentiment'] ] if doc['sentiment'] == 'pos' else [],
+						 tags=[doc['label']],
 						 restructure_doc=restructure_doc,
 						 split_size_long_seqs=max_seq_len)
 				for doc in tqdm(dataset)]
 
 		with open(os.path.join(out_dir, name+'.pkl'), 'wb') as f:
 			pickle.dump(docs, f)
-
-
-	# Get label_mapping
-	label_to_idx = {'pos':0}
 
 	label_to_idx_path = os.path.join(out_dir, 'label_to_idx.json')
 	with open(label_to_idx_path, 'w', encoding='utf-8') as f:

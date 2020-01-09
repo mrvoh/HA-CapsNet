@@ -94,7 +94,7 @@ def objective(params):
 		gc.collect()
 
 		# call main
-		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval()
+		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval(False)
 		scores.append(f1_micro)
 
 	# save trials object for safety
@@ -109,7 +109,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--max_evals",
-						default=100,
+						default=50,
 						type=int,
 						help="Total nr of optimization steps.")
 	parser.add_argument("--K",
@@ -129,11 +129,6 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="Path of trials object save.")
-	# parser.add_argument("--in_trials_path",
-	# 					default='trials.pkl',
-	# 					type=str,
-	# 					required=False,
-	# 					help="Path of trials object to read in.")
 	parser.add_argument("--log_path",
 						default='opt_log.txt',
 						type=str,
@@ -145,12 +140,12 @@ if __name__ == '__main__':
 						required=False,
 						help="Path from where to read the config for training.")
 	parser.add_argument("--data_path",
-						default=os.path.join('dataset','reuters-full','train.pkl'),
+						default=os.path.join('dataset','reuters','dev.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
 	parser.add_argument("--label_to_idx_path",
-						default=os.path.join('dataset', 'reuters-full', 'label_to_idx.json'),
+						default=os.path.join('dataset', 'reuters', 'label_to_idx.json'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")

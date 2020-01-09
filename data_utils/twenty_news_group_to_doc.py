@@ -14,8 +14,8 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 	# retrieve data and create splits
-	train_full = fetch_20newsgroups(subset='train')
-	shuffle(train_full)
+	train_full = fetch_20newsgroups(subset='train', shuffle=True)
+	# shuffle(train_full)
 	train = train_full[:int(percentage_train*len(train_full))]
 	dev = train_full[int(percentage_train*len(train_full)):]
 	del train_full

@@ -38,7 +38,7 @@ def write_classification_report( filepath, y_pred, y_true, label_to_idx, convert
 	precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred)
 
 	# write metrics to file
-	eval_filepath = filepath + '_class_report.txt'
+	eval_filepath = filepath + '_F1_{}.txt'.format(f1)
 	eval_output_2 = "Average:   Precision:   {:.2f}%;    Recall:   {:.2f}%; FB1:   {:.2f}".format(
 		np.average(precision, weights=support) * 100,
 		np.average(recall, weights=support) * 100,
