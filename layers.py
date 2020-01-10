@@ -91,9 +91,39 @@ class ULMFiTEncoder(nn.Module):
 
 		self.ulmfit = lm #next(lm.modules())[0]
 
+		self.layer_map = stop_map = {
+			0:10, # lstm layer 3
+			1:8, # lstm layer 2
+			2:6, # lstm layer 1
+			3:0 # all
+		}
+
+	def get_layer_params(self, l):
+
+		assert 0 <= l <= 3, "Ulmfit consists of only 4 layers, choose l between 0 and 3"
+		assert isinstance(l, int), "Please give an integer value for l"
+		#TODO: return all params of layer l such that specific lr can be set
+
+		all_modules = list(self.ulmfit.modules())
+		all_modules.pop(0) # remove AWD LSTM container
+		all_modules.pop(2)  # remove LSTM Module List
+
+		if l == 0:
+			params = [mod.parameters(recurse=False) for mod in all_modules[self.layer_map[l]:]]
+		else:
+			params = [mod.parameters(recurse=False) for mod in all_modules[self.layer_map[l]:self.layer_map[l-1]]]
+
+		params = [p for mod in params for p in mod]
+
+		other_params  = [mod.parameters(recurse=False) for mod in all_modules[:self.layer_map[l]]]
+		other_params = [p for mod in other_params for p in mod]
+		p = [param for param in params if not any([param.equal(p) for p in other_params])]
+		return p
+
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
 		stop_map = {
+			-1:10**6,
 			0:10, # lstm layer 3
 			1:8, # lstm layer 2
 			2:6, # lstm layer 1
@@ -123,7 +153,7 @@ class ULMFiTEncoder(nn.Module):
 		# manually reset the hidden states
 		self.ulmfit.reset()
 
-		h, c = self.ulmfit(x)
+		h, c = self.ulmfit(x) 
 
 		x = h[-1]#[:,-1,:] # final hidden state
 		x = self.ln(x)
@@ -485,7 +515,7 @@ class FCCaps(nn.Module):
 		self.is_AKDE = is_AKDE
 		self.sigmoid = nn.Sigmoid()
 
-	def forward(self, x ):
+	def forward(self, x):
 		batch_size = x.size(0)
 
 		W1 = self.W1
@@ -495,7 +525,7 @@ class FCCaps(nn.Module):
 		W1 = W1.repeat(batch_size, 1, 1, 1, 1)
 		u_hat = torch.matmul(W1, x)
 
-		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).cuda()
+		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
@@ -514,7 +544,7 @@ class FCCaps(nn.Module):
 		W1 = W1.repeat(batch_size, 1, 1, 1, 1)
 		u_hat = torch.matmul(W1, x)
 
-		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, variable_output_capsule_num, 1)).cuda()
+		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, variable_output_capsule_num, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE == True:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
@@ -611,7 +641,7 @@ class CapsNet_Text(nn.Module):
 
 			# Copy only the maximum capsule index from this batch sample.
 			# This masks out (leaves as zero) the other capsules in this sample.
-			batch_masked = Variable(torch.zeros(input_batch.size())).cuda()
+			batch_masked = Variable(torch.zeros(input_batch.size())).to(next(self.parameters()).device)
 			batch_masked[v_max_index[batch_idx]] = input_batch[v_max_index[batch_idx]]
 			all_masked[batch_idx] = batch_masked
 

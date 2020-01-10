@@ -16,9 +16,12 @@ import tqdm
 from utils.argparser import get_parser
 from data_utils.data_utils import process_dataset, get_data_loader, embeddings_from_docs, doc_to_fasttext
 from text_class_learner import MultiLabelTextClassifier
-from data_utils.eur_lex57k_to_doc import parse as eur_lex_parse
+# from data_utils.eur_lex57k_to_doc import parse as eur_lex_parse
 from data_utils.reuters_to_doc import parse as reuters_parse
 from data_utils.imdb_to_doc import parse as imdb_parse
+from data_utils.trec_to_doc import parse as trec_parse
+from data_utils.twenty_news_group_to_doc import parse as twenty_news_parse
+
 from data_utils.csv_to_documents import sheet_to_docs as parse_sheet
 from model import FastTextLearner
 from layers import ULMFiTEncoder
@@ -31,7 +34,7 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-def main():
+def main(do_save=True):
 	#########################################################################################
 	# ARGUMENT PARSING
 	#########################################################################################
@@ -94,8 +97,16 @@ def main():
 		if args.dataset_name.lower() == 'reuters':
 			reuters_parse(args.write_data_dir, args.percentage_train, use_ulmfit=args.word_encoder.lower() == 'ulmfit',
 						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
-		if args.dataset_name.lower() == 'imdb':
+		elif args.dataset_name.lower() == 'trec':
+			trec_parse(args.write_data_dir, args.percentage_train,
+						  use_ulmfit=args.word_encoder.lower() == 'ulmfit',
+						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
+		elif args.dataset_name.lower() == 'imdb':
 			imdb_parse(args.write_data_dir, args.percentage_train,
+						  use_ulmfit=args.word_encoder.lower() == 'ulmfit',
+						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
+		elif args.dataset_name.lower() == '20news':
+			twenty_news_parse(args.write_data_dir, args.percentage_train,
 						  use_ulmfit=args.word_encoder.lower() == 'ulmfit',
 						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
 		elif args.dataset_name.lower() == 'eur-lex57k':
@@ -180,7 +191,8 @@ def main():
 																		label_to_idx=label_to_idx,
 																		min_freq_word=args.min_freq_word,
 																		unk=unk, pad=pad,
-																		label_value = args.label_value)
+																		label_value = args.label_value,
+																		binary_class=args.binary_class)
 		pos_weight = [v / len(train_dataset) for k, v in tag_counter_train.items()]
 		# Fix for when not all labels are present in train set
 		if len(pos_weight) != len(label_to_idx):
@@ -197,7 +209,8 @@ def main():
 
 		dev_dataset, word_to_idx, tag_counter_dev = process_dataset(dev_docs, word_to_idx=word_to_idx,
 																	label_to_idx=label_to_idx, min_freq_word=None,
-																	unk=unk, pad=pad, label_value = args.label_value)
+																	unk=unk, pad=pad, label_value = args.label_value,
+																	binary_class=args.binary_class)
 		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, False, use_rnn)
 		# Free some memory
 		del dev_dataset
@@ -218,7 +231,8 @@ def main():
 													  word_to_idx_path=args.word_to_idx_path,
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
-													  lr=args.learning_rate)
+													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
+													  keep_ulmfit_frozen= args.keep_frozen, do_save=do_save)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,
@@ -227,7 +241,7 @@ def main():
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
 									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps,
-									  binary_class=args.binary_class)
+									  binary_class=args.binary_class, dropout_caps=args.dropout_caps)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,
@@ -251,7 +265,8 @@ def main():
 													   label_to_idx=label_to_idx,
 													   min_freq_word=None,
 													   unk=unk, pad=pad,
-													   label_value = args.label_value)
+													   label_value = args.label_value,
+													   binary_class=args.binary_class)
 
 		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn)
 

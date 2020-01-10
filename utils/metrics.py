@@ -1,6 +1,59 @@
 import numpy as np
-from sklearn.metrics import accuracy_score, f1_score, hamming_loss
+from sklearn.metrics import accuracy_score, f1_score, hamming_loss, precision_recall_fscore_support
 from sklearn.utils.multiclass import type_of_target
+import os
+
+def _preprocess_y(y_true, y_pred, convert_logits):
+	# preprocesses predictions and ground truth for sklearn functions
+
+	if isinstance(y_pred, list):
+		y_pred = np.array(y_pred)
+
+	if isinstance(y_true, list):
+		y_true = np.array(y_true)
+
+	if not convert_logits:
+		y_pred = (y_pred > 0.5).astype(int)
+	else:
+		y_pred = (y_pred > 0).astype(int)
+
+	y_true = (y_true > 0.5).astype(int)
+
+	return y_true, y_pred
+
+def write_classification_report( filepath, y_pred, y_true, label_to_idx, convert_logits):
+	"""
+        Writes an evaluation file based on lists with predictions and ground truth -> fastest way to evaluate
+    """
+	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits)
+
+	idx_to_label = {int(v):k for k,v in label_to_idx.items()}
+	# convert predictions
+	# y_pred = [idx_to_label[y] for y in y_pred]
+	# y_true = [idx_to_label[y] for y in y_true]
+
+	# get labels of interest
+	labels = [idx_to_label[ix] for ix in range(len(idx_to_label))]
+
+	precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred)
+
+	# write metrics to file
+	eval_filepath = filepath + '_F1_{}.txt'.format(f1)
+	eval_output_2 = "Average:   Precision:   {:.2f}%;    Recall:   {:.2f}%; FB1:   {:.2f}".format(
+		np.average(precision, weights=support) * 100,
+		np.average(recall, weights=support) * 100,
+		np.average(f1, weights=support))
+	with open(os.path.join(eval_filepath), 'w') as f:
+		# overall metrics
+		# f.write(eval_output_1 + '\n')
+		f.write(eval_output_2 + '\n')
+		f.write(
+			'-------------------------------------------------------------------------------------------------------' + '\n')
+		# metrics per label
+		for l, p, r, fs, s in zip(labels, precision, recall, f1, support):
+			label_eval = "{}:\t Precision:   {:.2f}%;    Recall:   {:.2f}%; FB1:   {:.2f}; Number of occurrences (goldlabel):   {}".format(
+				l, p * 100, r * 100, fs, s)
+			f.write(label_eval + '\n')
 
 def hamming_score(y_true, y_pred, normalize=True, sample_weight=None):
     '''
@@ -24,19 +77,8 @@ def hamming_score(y_true, y_pred, normalize=True, sample_weight=None):
     return np.mean(acc_list)
 
 def accuracy(y_true, y_pred, convert_logits):
-
-	if isinstance(y_pred, list):
-		y_pred = np.array(y_pred)
-
-	if isinstance(y_true, list):
-		y_true = np.array(y_true)
-
-	if not convert_logits:
-		y_pred = (y_pred > 0.5).astype(int)
-	else:
-		y_pred = (y_pred > 0).astype(int)
-
-	y_true = (y_true > 0.5).astype(int)
+	# Computed accuracy and related metrics
+	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits)
 
 	hamming = hamming_score(y_true, y_pred)
 	emr = accuracy_score(y_true, y_pred, normalize=True)
