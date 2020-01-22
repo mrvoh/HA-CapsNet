@@ -34,7 +34,7 @@ def doc_to_fasttext(in_path, out_path):
 			f.write(labels + ' ' + text+'\n')
 
 
-def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5):
+def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 300, min_count= 5, n_epoch = 20, minn = 3, maxn = 5, lr = 0.05, ):
 	# Read in docs
 	with open(in_path, 'rb') as f:
 		docs = pickle.load(f)
@@ -45,7 +45,7 @@ def embeddings_from_docs(in_path, out_path, fasttext_path=None, word_vec_dim = 3
 			f.write('\n'.join([' '.join([word for word in sen]) for sen in doc.sentences]))
 
 	# Train word embeddings
-	model = fasttext.train_unsupervised('tmp.txt', dim=word_vec_dim, ) #TODO: hyperparams
+	model = fasttext.train_unsupervised('tmp.txt', dim=word_vec_dim, minCount=min_count, epoch=n_epoch, minn=minn, maxn = maxn, lr = lr )
 
 	model.save_model(out_path)
 

@@ -34,7 +34,8 @@ def write_interm_results(params, loss):
 
 def set_params(params, config_path):
 
-	params['num_compressed_caps'] = int(params['num_compressed_caps'] )
+	for param in ['num_compressed_caps', 'min_freq_word', 'sent_hidden']:
+		params[param] = int(params[param])
 	# reads in config file and overwrites params for optimization
 	config = configparser.ConfigParser()
 	config.optionxform = str
@@ -110,7 +111,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--max_evals",
-						default=30,
+						default=50,
 						type=int,
 						help="Total nr of optimization steps.")
 	parser.add_argument("--K",
@@ -183,7 +184,8 @@ if __name__ == '__main__':
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
 		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
-		'sent_hidden':hp.uniform('sent_hidden', 50, 200)
+		'sent_hidden':hp.uniform('sent_hidden', 50, 200),
+		'min_freq_word':hp.uniform('min_freq_word', 1, 200)
 	}
 
 	# Create Trials object to log the performance

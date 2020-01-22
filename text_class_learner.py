@@ -12,6 +12,8 @@ from utils.logger import get_logger, Progbar
 from utils.metrics import *
 from document_model import Document, TextPreprocessor
 from losses.focal_loss import FocalLoss
+from losses.categorical_cross_entropy import CategoricalCrossEntropyWithSoftmax
+
 try:
 	import fasttext
 except:
@@ -212,7 +214,7 @@ class MultiLabelTextClassifier:
 				self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 		else:
 			if 'caps' in self.model_name.lower():
-				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
+				self.criterion = CategoricalCrossEntropyWithSoftmax()
 				# self.criterion = torch.nn.NLLLoss()
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
@@ -477,10 +479,10 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False) #TODO: remove hard-coded stuff
+		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False, self.binary_class) #TODO: remove hard-coded stuff
 
 		if write_path is not None:
-			write_classification_report(write_path, y_pred, y_true, self.label_to_idx, False) #TODO: remove hard-coded stuff
+			write_classification_report(write_path, y_pred, y_true, self.label_to_idx, False, self.binary_class) #TODO: remove hard-coded stuff
 
 		self.logger.info("Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'

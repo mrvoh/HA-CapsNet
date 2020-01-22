@@ -3,6 +3,7 @@ import torch.nn as nn
 from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
 # ## Word attention model with bias
 from layers import *
+
 try:
 	import fasttext
 except:
@@ -17,12 +18,12 @@ class FastTextLearner:
         self.model = None
 
     def train(self, train_path, dev_path=None, test_path=None, save_path = None, optimize_time=None, binary_classification=True,
-              lr=0.1, epoch=1000,embed_size=300, K=5):
+              lr=0.1, epoch=1000,embed_size=300, K=5, minn=3, maxn=5, minCount=5):
         # optimize_time given in seconds
 
         # train model
         if not optimize_time:
-            self.model = fasttext.train_supervised(train_path, loss='ova' if binary_classification else 'hs', lr=lr, epoch=epoch, dim=embed_size)
+            self.model = fasttext.train_supervised(train_path, loss='ova' if binary_classification else 'hs', lr=lr, epoch=epoch, dim=embed_size, minn=minn, maxn=maxn, minCount=minCount)
         else: # optimize params..
             assert dev_path, "When FastText is optimized, a development set must also be given"
             self.model = fasttext.train_supervised(train_path, autotune_validation_file=dev_path, autotune_duration=optimize_time, loss='hs' if binary_classification else 'ova')
@@ -260,8 +261,8 @@ class HCapsNet(nn.Module):
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
-        if not self.binary_class: # convert probs to log probs
-            activations = torch.log(activations)
+        # if not self.binary_class: # convert probs to log probs
+        #     activations = torch.log(activations)
 
         if encoding is None:
             return activations, word_attn_weight, sent_attn_weight, 0

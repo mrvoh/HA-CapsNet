@@ -3,7 +3,7 @@ from sklearn.metrics import accuracy_score, f1_score, hamming_loss, precision_re
 from sklearn.utils.multiclass import type_of_target
 import os
 
-def _preprocess_y(y_true, y_pred, convert_logits):
+def _preprocess_y(y_true, y_pred, convert_logits, binary_class):
 	# preprocesses predictions and ground truth for sklearn functions
 
 	if isinstance(y_pred, list):
@@ -12,20 +12,22 @@ def _preprocess_y(y_true, y_pred, convert_logits):
 	if isinstance(y_true, list):
 		y_true = np.array(y_true)
 
-	if not convert_logits:
-		y_pred = (y_pred > 0.5).astype(int)
-	else:
+	if not binary_class: # convert OHE to max index
+		y_pred = np.argmax(y_pred, axis=1)
+	elif not convert_logits: # round x > 0.5
+		y_pred = np.round(y_pred).astype(int) # round
+	else: # round x > 0
 		y_pred = (y_pred > 0).astype(int)
 
-	y_true = (y_true > 0.5).astype(int)
+	y_true = np.round(y_true).astype(int)
 
 	return y_true, y_pred
 
-def write_classification_report( filepath, y_pred, y_true, label_to_idx, convert_logits):
+def write_classification_report( filepath, y_pred, y_true, label_to_idx, convert_logits, binary_class):
 	"""
         Writes an evaluation file based on lists with predictions and ground truth -> fastest way to evaluate
     """
-	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits)
+	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits, binary_class)
 
 	idx_to_label = {int(v):k for k,v in label_to_idx.items()}
 	# convert predictions
@@ -76,9 +78,9 @@ def hamming_score(y_true, y_pred, normalize=True, sample_weight=None):
         acc_list.append(tmp_a)
     return np.mean(acc_list)
 
-def accuracy(y_true, y_pred, convert_logits):
+def accuracy(y_true, y_pred, convert_logits, binary_class):
 	# Computed accuracy and related metrics
-	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits)
+	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits, binary_class)
 
 	hamming = hamming_score(y_true, y_pred)
 	emr = accuracy_score(y_true, y_pred, normalize=True)
