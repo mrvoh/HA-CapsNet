@@ -15,38 +15,49 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 		os.makedirs(out_dir)
 	# retrieve data and create splits
 	train_full = fetch_20newsgroups(subset='train', shuffle=True)
+	n_samples = len(train_full['target'])
 	# shuffle(train_full)
-	train = train_full[:int(percentage_train*len(train_full))]
-	dev = train_full[int(percentage_train*len(train_full)):]
+	train = {
+		'data':train_full['data'][:int(percentage_train*n_samples)],
+		'filenames':train_full['filenames'][:int(percentage_train*n_samples)],
+		'target':train_full['target'][:int(percentage_train*n_samples)]
+	}
+	dev = {
+		'data': train_full['data'][int(percentage_train * n_samples):],
+		'filenames': train_full['filenames'][int(percentage_train * n_samples):],
+		'target': train_full['target'][int(percentage_train * n_samples):]
+	}
+
 	del train_full
 	test = fetch_20newsgroups(subset='test')
 	# initiate text preprocessor
 
+	# Get label_mapping
+	label_to_idx = {lab: ix for ix, lab in enumerate(test['target_names'])}
+	idx_to_label = {v:k for k,v in label_to_idx.items()}
 	text_preprocessor = TextPreprocessor(use_ulmfit)
 	# convert each file to a Document
 	for dataset, name in [(train, 'train'), (dev, 'dev'), (test, 'test')]:
 		if len(dataset) == 0:
 			continue
-		docs = [Document(text=doc['text'],
+		docs = [Document(text=dataset['data'][i],
 						 text_preprocessor = text_preprocessor,
-						 filename = 'test',
-						 tags=[doc['sentiment'] ] if doc['sentiment'] == 'pos' else [],
+						 filename = dataset['filenames'][i],
+						 tags=[idx_to_label[dataset['target'][i]]],
 						 restructure_doc=restructure_doc,
 						 split_size_long_seqs=max_seq_len)
-				for doc in tqdm(dataset)]
+				for i in tqdm(range(len(dataset['target'])))]
 
 		with open(os.path.join(out_dir, name+'.pkl'), 'wb') as f:
 			pickle.dump(docs, f)
 
 
-	# Get label_mapping
-	label_to_idx = {'pos':0}
+
 
 	label_to_idx_path = os.path.join(out_dir, 'label_to_idx.json')
 	with open(label_to_idx_path, 'w', encoding='utf-8') as f:
 		json.dump(label_to_idx, f)
 
 
-
 if __name__ == '__main__':
-	None
+	pass

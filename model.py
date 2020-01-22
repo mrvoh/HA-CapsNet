@@ -248,9 +248,10 @@ class HCapsNet(nn.Module):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
-        # stack and pad
-        sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
+        # sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
+        #         # # stack and pad
+        #         # sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
+        sen_encodings = sen_encodings.view(n_doc, n_sents, -1)
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 

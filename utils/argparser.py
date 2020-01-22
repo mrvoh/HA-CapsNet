@@ -152,17 +152,16 @@ def get_parser():
 						required=False,
 						help="Name of the dataset.")
 	parser.add_argument("--percentage_train",
-						default=0.8,
+						default=1.0,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--percentage_dev",
-						default=0.2,
+						default=0.0,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",
-						default='dataset\\imdb-full',
 						type=str,
-						required=False,
+						required=True,
 						help="Where to write the parsed data to.")
 	parser.add_argument("--num_backtranslations",
 						default=1,

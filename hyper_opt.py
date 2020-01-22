@@ -9,6 +9,7 @@ import configparser
 import gc
 from collections import OrderedDict
 from main import main as train_eval
+from imblearn.over_sampling import RandomOverSampler
 
 def write_interm_results(params, loss):
 	global log_path
@@ -54,7 +55,7 @@ def set_params(params, config_path):
 def objective(params):
 	# return {'loss': 1, 'status': STATUS_OK}
 	# objective fn to be minimized
-	global data_path, label_to_idx_path, K, config_path, trials
+	global data_path, label_to_idx_path, K, config_path, trials, balance_dataset
 
 	# get stratisfied split
 	df = docs_to_sheet(data_path, 'tmp.csv', label_to_idx_path)
@@ -65,6 +66,7 @@ def objective(params):
 	X = df.index
 	y = df[[col for col in df.columns if col != 'index']].values
 	del df
+
 	k_fold = IterativeStratification(n_splits=K, order=1)
 
 	# get docs
@@ -94,33 +96,32 @@ def objective(params):
 		gc.collect()
 
 		# call main
-		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval(False)
+		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval()
 		scores.append(f1_micro)
 
 	# save trials object for safety
 	with open('trials_tmp.pkl', 'wb') as f:
 		pickle.dump(trials, f)
 
+	return {'loss': 1-np.mean(scores), 'status': STATUS_OK}
 
-	return {'loss':1-np.mean(scores), 'status':STATUS_OK}
 
 if __name__ == '__main__':
-
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--max_evals",
-						default=50,
+						default=30,
 						type=int,
 						help="Total nr of optimization steps.")
 	parser.add_argument("--K",
-						default=3,
+						default=2,
 						type=int,
 						help="Number of splits for cross validation")
 	parser.add_argument("--preload_trials",
 						action='store_true',
 						help="Whether to preload an existing trials object.")
 	parser.add_argument("--in_trials_path",
-						default='trials.pkl',
+						default='trials_tmp.pkl',
 						type=str,
 						required=False,
 						help="Path of trials object to read in.")
@@ -140,7 +141,7 @@ if __name__ == '__main__':
 						required=False,
 						help="Path from where to read the config for training.")
 	parser.add_argument("--data_path",
-						default=os.path.join('dataset','reuters','dev.pkl'),
+						default=os.path.join('dataset','reuters','train.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
@@ -177,10 +178,12 @@ if __name__ == '__main__':
 	space = {
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
 		'weight_decay':hp.loguniform('weight_decay', np.log(1e-5), np.log(0.1)),
-		'dropout_caps':hp.uniform('dropout_caps', 0.25, 0.75),
+		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.6),
 		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-2)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
-		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1)
+		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
+		'label_value':hp.uniform('label_value', 0.9, 1.0),
+		'sent_hidden':hp.uniform('sent_hidden', 50, 200)
 	}
 
 	# Create Trials object to log the performance

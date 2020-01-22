@@ -11,6 +11,7 @@ from utils.radam import RAdam
 from utils.logger import get_logger, Progbar
 from utils.metrics import *
 from document_model import Document, TextPreprocessor
+from losses.focal_loss import FocalLoss
 try:
 	import fasttext
 except:
@@ -203,7 +204,8 @@ class MultiLabelTextClassifier:
 		if binary_class:
 			# Initialize training attributes
 			if 'caps' in self.model_name.lower():
-				self.criterion = torch.nn.BCELoss()
+				self.criterion = FocalLoss() #TODO: test and propagate
+				# self.criterion = torch.nn.BCELoss()
 			else:
 				if pos_weight:
 					pos_weight = torch.tensor(pos_weight).to(self.device)
@@ -231,7 +233,7 @@ class MultiLabelTextClassifier:
 			# intialize per-layer lr for ULMFiT
 			eta = 2.6 # from ULMFiT paper
 			num_layers = 4
-			lr_div_factor = 10
+			lr_div_factor = 15
 
 			params = [
 				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/lr_div_factor},
@@ -406,7 +408,8 @@ class MultiLabelTextClassifier:
 		if best_score <= f1_micro_dev and self.do_save:
 			best_score = f1_micro_dev
 
-			self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
+			# self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
+			self.save(os.path.join(self.save_dir, self.model_name + '.pt'))
 			# torch.save(self.model.state_dict(),
 			# 		   os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev, self.K, rp_k_dev)))
 			self.logger.info("Saved model with new best score: {0:.3f}".format(rp_k_dev))
@@ -443,7 +446,7 @@ class MultiLabelTextClassifier:
 
 		return best_score, best_loss
 
-	def eval_dataset(self, dataloader, K=0, max_samples=250, write_path = None):
+	def eval_dataset(self, dataloader, K=0, max_samples=None, write_path = None):
 		self.logger.info("Evaluating model")
 		self.model.eval()
 		y_pred = []

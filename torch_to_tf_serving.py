@@ -186,7 +186,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--pretrained_path', help="Path to model to export.", type=str,
-        default='models/HCapsNet_loss=0.03844_RP5=0.685.pt')
+        default='models/HCapsNet.pt')
     parser.add_argument(
         '--onnx-file', help="File where to export the ONNX file", type=str,
         default='tmp_onnx.onnx')
