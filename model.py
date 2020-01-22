@@ -246,9 +246,17 @@ class HCapsNet(nn.Module):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
-        # stack and pad
-        sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
+        # for ONNX bs
+        # if isinstance(n_doc, torch.Tensor):
+        #     n_doc = n_doc.item()
+        # if isinstance(n_sents, torch.Tensor):
+        #     n_sents = n_sents.item()
+
+        sen_encodings = sen_encodings.view(n_doc, n_sents, -1)
+        #
+        # sen_encodings = sen_encodings.split(split_size=n_sents.item())
+        # # stack and pad
+        # sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
@@ -258,7 +266,7 @@ class HCapsNet(nn.Module):
         activations = activations.squeeze(2)
 
         if encoding is None:
-            return activations, word_attn_weight, sent_attn_weight, 0
+            return activations, word_attn_weight, sent_attn_weight, torch.tensor(0)
 
         rec_los = self.caps_classifier.reconstruction_loss(encoding, poses)
 

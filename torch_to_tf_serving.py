@@ -53,7 +53,7 @@ def export_onnx(model, dummy_input, file, input_names, output_names,
     # https://github.com/pytorch/pytorch/blob/master/torch/onnx/utils.py
     # ISSUE: https://github.com/pytorch/pytorch/issues/14698
     torch.onnx.export(model, args=dummy_input, input_names=input_names,
-                      output_names=output_names, f=file)
+                      output_names=output_names, f=file, verbose=True)
 
     # Reload model to fix the batch size
     model = onnx.load(file)
@@ -155,6 +155,7 @@ def main(args):
     learner = MultiLabelTextClassifier.load(args.pretrained_path)
 
     model = learner.model
+    model.eval()
 
     n_docs = 5
     n_sents = 7
@@ -186,7 +187,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--pretrained_path', help="Path to model to export.", type=str,
-        default='models/HCapsNet_loss=0.03844_RP5=0.685.pt')
+        default='models/HAN_loss=0.00412_RP5=0.000.pt')
     parser.add_argument(
         '--onnx-file', help="File where to export the ONNX file", type=str,
         default='tmp_onnx.onnx')

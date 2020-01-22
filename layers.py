@@ -10,61 +10,64 @@ from torchnlp.encoders.text import stack_and_pad_tensors
 from fastai.text import *
 # from fastai
 
+
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+
 
 def _get_clones(module, N):
 	return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
-class TransformerEncoder(nn.Module):
-	r"""TransformerEncoder is a stack of N encoder layers
 
-	Args:
-		encoder_layer: an instance of the TransformerEncoderLayer() class (required).
-		num_layers: the number of sub-encoder-layers in the encoder (required).
-		norm: the layer normalization component (optional).
-
-	Examples::
-		>>> encoder_layer = nn.TransformerEncoderLayer(d_model, nhead)
-		>>> transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
-	"""
-
-	def __init__(self, emb_dim, hidden_dim, encoder_layer, num_layers, norm=None, dropout = 0.1):
-		super(TransformerEncoder, self).__init__()
-		self.layers = _get_clones(encoder_layer, num_layers)
-		self.num_layers = num_layers
-		self.emb_to_hidden = nn.Linear(emb_dim, hidden_dim)
-		self.drop = nn.Dropout(dropout)
-		self.norm1 = nn.LayerNorm(hidden_dim)
-		if norm:
-			self.norm = norm
-		else:
-			self.norm = nn.LayerNorm(hidden_dim)
-
-	def forward(self, src, mask=None, src_key_padding_mask=None):
-		r"""Pass the input through the endocder layers in turn.
-
-		Args:
-			src: the sequnce to the encoder (required).
-			mask: the mask for the src sequence (optional).
-			src_key_padding_mask: the mask for the src keys per batch (optional).
-
-		Shape:
-			see the docs in Transformer class.
-		"""
-
-
-		output = F.relu(self.emb_to_hidden(src))
-		output = self.norm1(self.drop(output))
-
-		for i in range(self.num_layers):
-			output = self.layers[i](output, src_mask=mask,
-									src_key_padding_mask=src_key_padding_mask)
-
-		if self.norm:
-			output = self.norm(output)
-
-		return output
+# class TransformerEncoder(nn.Module):
+# 	r"""TransformerEncoder is a stack of N encoder layers
+#
+# 	Args:
+# 		encoder_layer: an instance of the TransformerEncoderLayer() class (required).
+# 		num_layers: the number of sub-encoder-layers in the encoder (required).
+# 		norm: the layer normalization component (optional).
+#
+# 	Examples::
+# 		>>> encoder_layer = nn.TransformerEncoderLayer(d_model, nhead)
+# 		>>> transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
+# 	"""
+#
+# 	def __init__(self, emb_dim, hidden_dim, encoder_layer, num_layers, norm=None, dropout = 0.1):
+# 		super(TransformerEncoder, self).__init__()
+# 		self.layers = _get_clones(encoder_layer, num_layers)
+# 		self.num_layers = num_layers
+# 		self.emb_to_hidden = nn.Linear(emb_dim, hidden_dim)
+# 		self.drop = nn.Dropout(dropout)
+# 		self.norm1 = nn.LayerNorm(hidden_dim)
+# 		if norm:
+# 			self.norm = norm
+# 		else:
+# 			self.norm = nn.LayerNorm(hidden_dim)
+#
+# 	def forward(self, src, mask=None, src_key_padding_mask=None):
+# 		r"""Pass the input through the endocder layers in turn.
+#
+# 		Args:
+# 			src: the sequnce to the encoder (required).
+# 			mask: the mask for the src sequence (optional).
+# 			src_key_padding_mask: the mask for the src keys per batch (optional).
+#
+# 		Shape:
+# 			see the docs in Transformer class.
+# 		"""
+#
+#
+# 		output = F.relu(self.emb_to_hidden(src))
+# 		output = self.norm1(self.drop(output))
+#
+# 		for i in range(self.num_layers):
+# 			output = self.layers[i](output, src_mask=mask,
+# 									src_key_padding_mask=src_key_padding_mask)
+#
+# 		if self.norm:
+# 			output = self.norm(output)
+#
+# 		return output
 
 
 ###################################################################################################
@@ -180,12 +183,12 @@ class AttentionWordEncoder(nn.Module):
 
 		if encoder_type.lower() == 'gru':
 			word_out = 2* word_hidden if bidirectional else word_hidden
-			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
+			self.word_encoder = nn.LSTM(embed_size, word_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
 			# TEST
 			# encoder_layer = TransformerCapsEncoderLayer(word_hidden, 1, 2 * word_hidden, dropout)
 			encoder_layer = nn.TransformerEncoderLayer(word_hidden, nhead, 2*word_hidden, dropout)
-			self.word_encoder = TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
+			self.word_encoder = nn.TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
 
 			word_out = word_hidden
 		elif encoder_type.lower() == 'ulmfit':
@@ -267,7 +270,7 @@ class AttentionSentEncoder(nn.Module):
 			self.bidirectional = bidirectional
 			# word_out = 2 * word_hidden if bidirectional else word_hidden
 			sent_out = 2 * sent_hidden if bidirectional else sent_hidden
-			self.sent_encoder = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
+			self.sent_encoder = nn.LSTM(word_out, sent_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
 			encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
 			# TEST
@@ -395,6 +398,12 @@ class GRUMultiHeadAtt(nn.Module):
 # CAPSNET LAYERS
 ###################################################################################################
 
+# @torch.jit.script
+def squash_v1JIT(x, axis):
+	s_squared_norm = torch.sum(torch.pow(x, 2), dim=int(axis), keepdim=True)
+	scale = torch.sqrt(s_squared_norm)/ (0.5 + s_squared_norm)
+	return scale * x
+
 def squash_v1(x, axis):
 	s_squared_norm = (x ** 2).sum(axis, keepdim=True)
 	scale = torch.sqrt(s_squared_norm)/ (0.5 + s_squared_norm)
@@ -418,7 +427,6 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	poses = v_j.squeeze(1)
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
-
 
 def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
 	last_loss = 0.0
@@ -445,6 +453,39 @@ def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
 			break
 		else:
 			last_loss = kde_loss
+	poses = v_j.squeeze(1)
+	activations = torch.sqrt((poses ** 2).sum(2))
+	return poses, activations
+
+# @torch.jit.script
+def Adaptive_KDE_routingJIT(batch_size, b_ij, u_hat, v_j):
+
+	last_loss = torch.tensor(0.0)
+	cont = True
+	# b, _, n_class, n_caps, h = u_hat.size()
+
+	while cont:
+		c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
+
+		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
+
+		tmp_in = (c_ij * u_hat).sum(dim=1, keepdim=True)
+		v_j = squash_v1(x=tmp_in, axis=torch.tensor([3]))
+		# v_j = torch.sum(tmp, dim=1, keepdim=True)
+		dd = 1 - ((squash_v1(x=u_hat, axis=torch.tensor(3))-v_j)** 2).sum(3)
+		b_ij = b_ij + dd
+
+		c_ij = c_ij.view(batch_size, c_ij.size(1), c_ij.size(2))
+		dd = dd.view(batch_size, dd.size(1), dd.size(2))
+
+		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
+		kde_loss = torch.log(kde_loss)
+
+		if abs(kde_loss - last_loss) < 0.05:
+			cont = False
+		else:
+			last_loss = kde_loss
+	# v_j = _inner_loop_KDE(batch_size, u_hat)
 	poses = v_j.squeeze(1)
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
@@ -496,7 +537,7 @@ class PrimaryCaps(nn.Module):
 		batch_size = x.size(0)
 		u = self.capsules(x)
 		u = u.view(batch_size, self.num_capsules, self.out_channels, -1, 1)
-		poses = squash_v1(u, axis=1)
+		poses = squash_v1(u, axis=1) #torch.tensor(1))
 		activations = torch.sqrt((poses ** 2).sum(1))
 		return poses, activations
 
@@ -515,7 +556,7 @@ class FCCaps(nn.Module):
 		self.is_AKDE = is_AKDE
 		self.sigmoid = nn.Sigmoid()
 
-	def forward(self, x ):
+	def forward(self, x):
 		batch_size = x.size(0)
 
 		W1 = self.W1
@@ -526,9 +567,9 @@ class FCCaps(nn.Module):
 		u_hat = torch.matmul(W1, x)
 
 		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
-
+		v_j = Variable(torch.zeros(batch_size, 1, self.output_capsule_num, self.in_channels, 1)).to(next(self.parameters()).device)
 		if self.is_AKDE:
-			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
+			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat) #, v_j)
 		else:
 			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
 			poses, activations = KDE_routing(batch_size, b_ij, u_hat)
@@ -546,7 +587,7 @@ class FCCaps(nn.Module):
 
 		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, variable_output_capsule_num, 1)).to(next(self.parameters()).device)
 
-		if self.is_AKDE == True:
+		if self.is_AKDE:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
 		else:
 			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
