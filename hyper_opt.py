@@ -97,7 +97,7 @@ def objective(params):
 		gc.collect()
 
 		# call main
-		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval()
+		r_k, p_k, rp_k, ndcg_k, avg_loss, hamming, emr, f1_micro, f1_macro = train_eval(False)
 		scores.append(f1_micro)
 
 	# save trials object for safety
@@ -185,7 +185,7 @@ if __name__ == '__main__':
 		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
 		'sent_hidden':hp.uniform('sent_hidden', 50, 200),
-		'min_freq_word':hp.uniform('min_freq_word', 1, 200)
+		'min_freq_word':hp.uniform('min_freq_word', 1, 50)
 	}
 
 	# Create Trials object to log the performance

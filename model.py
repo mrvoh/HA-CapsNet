@@ -261,8 +261,8 @@ class HCapsNet(nn.Module):
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
-        # if not self.binary_class: # convert probs to log probs
-        #     activations = torch.log(activations)
+        if not self.binary_class: # convert probs to log probs
+            activations = torch.log(activations/(1-activations))
 
         if encoding is None:
             return activations, word_attn_weight, sent_attn_weight, 0

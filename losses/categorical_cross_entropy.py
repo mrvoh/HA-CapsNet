@@ -4,16 +4,17 @@ import torch
 class CategoricalCrossEntropyWithSoftmax(nn.Module):
     def __init__(self):
         super(CategoricalCrossEntropyWithSoftmax, self).__init__()
-        self.log_softmax = nn.LogSoftmax()
+        self.log_softmax = nn.Softmax(dim=1)
 
 
     def forward(self, input, target):
         # convert to OHE
-        target = torch.eye(input.shape[1])[target].to(target.device)
+        x = input.shape[1]
+        target = torch.eye(input.shape[1], requires_grad=True)[target].to(target.device)
 
-        # input = torch.clamp(input, 1e-9, 1 - 1e-9)
+        input = torch.clamp(input, 1e-9, 1 - 1e-9)
 
         # apply log softmax
         input = self.log_softmax(input)
 
-        return -(target * input).sum(dim=1).mean()
+        return -(target * torch.log(input)).sum(dim=1).mean()

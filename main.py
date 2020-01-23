@@ -34,7 +34,7 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-def main(do_save=True):
+def main(use_prog_bar=True):
 	#########################################################################################
 	# ARGUMENT PARSING
 	#########################################################################################
@@ -234,7 +234,7 @@ def main(do_save=True):
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
 													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
-													  keep_ulmfit_frozen= args.keep_frozen, do_save=do_save)
+													  keep_ulmfit_frozen= args.keep_frozen)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,
@@ -247,7 +247,7 @@ def main(do_save=True):
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,
-							 num_epochs=args.num_train_epochs, eval_every=args.eval_every)
+							 num_epochs=args.num_train_epochs, eval_every=args.eval_every, use_prog_bar=use_prog_bar)
 
 	###########################################################################
 	# EVAL MODEL

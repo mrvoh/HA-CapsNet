@@ -77,7 +77,7 @@ class MultiLabelTextClassifier:
 
 	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
 				 tensorboard_dir = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
-				 dropout = 0.1, K=5, verbose=True, do_save = True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
+				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
 
 		self.model_name = model_name
 		self.use_doc_encoding = 'caps' in model_name.lower()
@@ -101,7 +101,6 @@ class MultiLabelTextClassifier:
 		self.verbose = verbose
 		self.gradual_unfreeze = gradual_unfeeze
 		self.keep_ulmfit_frozen = keep_ulmfit_frozen
-		self.do_save = do_save
 
 		# Placeholders for attributes to be initialized
 		# TODO: use kwarg arguments downstream  --> or just keep for load method?
@@ -214,7 +213,8 @@ class MultiLabelTextClassifier:
 				self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 		else:
 			if 'caps' in self.model_name.lower():
-				self.criterion = CategoricalCrossEntropyWithSoftmax()
+				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
+				# self.criterion = CategoricalCrossEntropyWithSoftmax()
 				# self.criterion = torch.nn.NLLLoss()
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
@@ -335,7 +335,7 @@ class MultiLabelTextClassifier:
 
 
 
-	def train(self, dataloader_train, dataloader_dev, pos_weight, num_epochs, eval_every):
+	def train(self, dataloader_train, dataloader_dev, pos_weight, num_epochs, eval_every, use_prog_bar):
 
 		# Train epoch
 		best_score, best_loss, train_step = (0,0,0)
@@ -351,9 +351,9 @@ class MultiLabelTextClassifier:
 			# continue
 			best_score, best_loss, train_step = self._train_epoch(dataloader_train, dataloader_dev, self.optimizer,
 																  self.criterion, eval_every, train_step, best_score,
-																  best_loss)
+																  best_loss, use_prog_bar=use_prog_bar)
 
-	def _train_epoch(self, dataloader_train, dataloader_dev, optimizer, criterion, eval_every, train_step, best_score, best_loss):
+	def _train_epoch(self, dataloader_train, dataloader_dev, optimizer, criterion, eval_every, train_step, best_score, best_loss, use_prog_bar=False):
 
 		prog = Progbar(len(dataloader_train))
 
@@ -385,7 +385,7 @@ class MultiLabelTextClassifier:
 
 			# torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
 			optimizer.step()
-			prog.update(batch_idx + 1, values=[("train loss", loss.item()), ("recon loss", rec_loss)])
+			if use_prog_bar: prog.update(batch_idx + 1, values=[("train loss", loss.item()), ("recon loss", rec_loss)])
 			torch.cuda.empty_cache()
 
 			if train_step % eval_every == 0:
@@ -407,7 +407,7 @@ class MultiLabelTextClassifier:
 																	# max_samples=len(dataloader_dev))
 
 		# Save model if best
-		if best_score <= f1_micro_dev and self.do_save:
+		if best_score <= f1_micro_dev:
 			best_score = f1_micro_dev
 
 			# self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
