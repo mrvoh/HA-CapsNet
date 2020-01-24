@@ -394,12 +394,17 @@ class GRUMultiHeadAtt(nn.Module):
 ###################################################################################################
 # CAPSNET LAYERS
 ###################################################################################################
-
 @torch.jit.script
 def squash_v1(x, axis):
-	s_squared_norm = (x ** 2).sum(axis.item(), keepdim=True)
+	s_squared_norm = torch.sum(torch.pow(x, 2), dim=int(axis), keepdim=True)
 	scale = torch.sqrt(s_squared_norm)/ (0.5 + s_squared_norm)
 	return scale * x
+
+# @torch.jit.script
+# def squash_v1(x, axis):
+# 	s_squared_norm = (x ** 2).sum(axis.item(), keepdim=True)
+# 	scale = torch.sqrt(s_squared_norm)/ (0.5 + s_squared_norm)
+# 	return scale * x
 
 def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	num_iterations = 3
@@ -420,8 +425,8 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
 
-
-def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
+@torch.jit.script
+def Adaptive_KDE_routing(batch_size, b_ij, u_hat, v_j):
 	last_loss = 0.0
 	while True:
 		if False:
@@ -432,15 +437,15 @@ def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
 		else:
 			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
 		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
-		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=3)
-		dd = 1 - ((squash_v1(u_hat, axis=3)-v_j)** 2).sum(3)
+		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=torch.tensor(3))
+		dd = 1 - ((squash_v1(u_hat, axis=torch.tensor(3))-v_j)** 2).sum(3)
 		b_ij = b_ij + dd
 
 		c_ij = c_ij.view(batch_size, c_ij.size(1), c_ij.size(2))
 		dd = dd.view(batch_size, dd.size(1), dd.size(2))
 
 		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
-		kde_loss = np.log(kde_loss.item())
+		kde_loss = torch.log(kde_loss)
 
 		if abs(kde_loss - last_loss) < 0.05:
 			break
@@ -497,7 +502,7 @@ class PrimaryCaps(nn.Module):
 		batch_size = x.size(0)
 		u = self.capsules(x)
 		u = u.view(batch_size, self.num_capsules, self.out_channels, -1, 1)
-		poses = squash_v1(u, axis=1)
+		poses = squash_v1(u, axis=torch.tensor(1))
 		activations = torch.sqrt((poses ** 2).sum(1))
 		return poses, activations
 
