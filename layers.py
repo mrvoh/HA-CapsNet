@@ -532,9 +532,10 @@ class FCCaps(nn.Module):
 		u_hat = torch.matmul(W1, x)
 
 		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
+		v_j = Variable(torch.FloatTensor(batch_size, 1, self.output_capsule_num, self.in_channels, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE:
-			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
+			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat, v_j)
 		else:
 			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
 			poses, activations = KDE_routing(batch_size, b_ij, u_hat)
