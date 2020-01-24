@@ -426,31 +426,34 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	return poses, activations
 
 @torch.jit.script
-def Adaptive_KDE_routing(batch_size, b_ij, u_hat, v_j):
+def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
+	# b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, self.output_capsule_num, 1))
+	# v_j = Variable(torch.FloatTensor(batch_size, 1, self.output_capsule_num, self.in_channels, 1))
+	#u_ht torch.Size([5, 207, 90, 32, 1])
+	bs, in_caps_num, out_caps_num, _ = b_ij.size()
+	_, num_compr_caps, out_caps, num_caps, _ = u_hat.size()
+	v_j = torch.rand(batch_size, 1, out_caps_num, num_caps)
+	cont = True
 	last_loss = 0.0
-	while True:
-		if False:
-			leak = torch.zeros_like(b_ij).sum(dim=2, keepdim=True)
-			leaky_logits = torch.cat((leak, b_ij),2)
-			leaky_routing = F.softmax(leaky_logits, dim=2)
-			c_ij = leaky_routing[:,:,1:,:].unsqueeze(4)
-		else:
-			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
-		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
-		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=torch.tensor(3))
-		dd = 1 - ((squash_v1(u_hat, axis=torch.tensor(3))-v_j)** 2).sum(3)
-		b_ij = b_ij + dd
+	# while cont:
+	# 	c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
+	#
+	# 	c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
+	# 	v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=torch.tensor(3))
+	# 	dd = 1 - ((squash_v1(u_hat, axis=torch.tensor(3))-v_j)** 2).sum(3)
+	# 	b_ij = b_ij + dd
+	#
+	# 	c_ij = c_ij.view(batch_size, c_ij.size(1), c_ij.size(2))
+	# 	dd = dd.view(batch_size, dd.size(1), dd.size(2))
+	#
+	# 	kde_loss = torch.mul(c_ij, dd).sum()/batch_size
+	# 	kde_loss = torch.log(kde_loss)
+	#
+	# 	if abs(kde_loss - last_loss) < 0.05:
+	# 		cont = False
+	# 	else:
+	# 		last_loss = kde_loss
 
-		c_ij = c_ij.view(batch_size, c_ij.size(1), c_ij.size(2))
-		dd = dd.view(batch_size, dd.size(1), dd.size(2))
-
-		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
-		kde_loss = torch.log(kde_loss)
-
-		if abs(kde_loss - last_loss) < 0.05:
-			break
-		else:
-			last_loss = kde_loss
 	poses = v_j.squeeze(1)
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
@@ -515,14 +518,17 @@ class FCCaps(nn.Module):
 		self.input_capsule_num = input_capsule_num
 		self.output_capsule_num = output_capsule_num
 
+		self.in_channels_jit = torch.LongTensor([in_channels])
+
 		self.W1 = nn.Parameter(torch.FloatTensor(1, input_capsule_num, output_capsule_num, out_channels, in_channels))
+		# self.v_j = torch.FloatTensor(batch_size, 1, self.output_capsule_num, self.in_channels, 1))
 		torch.nn.init.xavier_uniform_(self.W1)
 
 		self.is_AKDE = is_AKDE
 		self.sigmoid = nn.Sigmoid()
 
 	def forward(self, x):
-		batch_size = x.size(0)
+		batch_size = torch.tensor(x.size(0))
 
 		W1 = self.W1
 
@@ -532,10 +538,10 @@ class FCCaps(nn.Module):
 		u_hat = torch.matmul(W1, x)
 
 		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
-		v_j = Variable(torch.FloatTensor(batch_size, 1, self.output_capsule_num, self.in_channels, 1)).to(next(self.parameters()).device)
+		# v_j = Variable(torch.zeros(batch_size, 1, self.output_capsule_num, self.in_channels, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE:
-			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat, v_j)
+			poses, activations = Adaptive_KDE_routing(torch.tensor(batch_size), b_ij, u_hat) #, v_j)
 		else:
 			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
 			poses, activations = KDE_routing(batch_size, b_ij, u_hat)
