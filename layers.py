@@ -180,7 +180,7 @@ class AttentionWordEncoder(nn.Module):
 
 		if encoder_type.lower() == 'gru':
 			word_out = 2* word_hidden if bidirectional else word_hidden
-			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
+			self.word_encoder = nn.LSTM(embed_size, word_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
 			# TEST
 			# encoder_layer = TransformerCapsEncoderLayer(word_hidden, 1, 2 * word_hidden, dropout)
@@ -267,7 +267,7 @@ class AttentionSentEncoder(nn.Module):
 			self.bidirectional = bidirectional
 			# word_out = 2 * word_hidden if bidirectional else word_hidden
 			sent_out = 2 * sent_hidden if bidirectional else sent_hidden
-			self.sent_encoder = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
+			self.sent_encoder = nn.LSTM(word_out, sent_hidden, bidirectional=bidirectional)
 		elif encoder_type.lower() == 'transformer':
 			encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
 			# TEST
@@ -395,8 +395,9 @@ class GRUMultiHeadAtt(nn.Module):
 # CAPSNET LAYERS
 ###################################################################################################
 
+@torch.jit.script
 def squash_v1(x, axis):
-	s_squared_norm = (x ** 2).sum(axis, keepdim=True)
+	s_squared_norm = (x ** 2).sum(axis.item(), keepdim=True)
 	scale = torch.sqrt(s_squared_norm)/ (0.5 + s_squared_norm)
 	return scale * x
 
