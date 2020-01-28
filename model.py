@@ -179,7 +179,7 @@ class HGRULWAN(nn.Module):
 class HCapsNet(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, binary_class = True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
                  num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100,
-                 dropout_caps = 0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0,**kwargs):
+                 dropout_caps = 0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit = 1.0, KDE_epsilon = 0.05, **kwargs):
         super(HCapsNet, self).__init__()
 
         # self.batch_size = batch_size
@@ -194,6 +194,7 @@ class HCapsNet(nn.Module):
         # self.sent_encoder = sent_encoder
         self.dropout = dropout
         self.lambda_reg_caps = lambda_reg_caps
+        self.KDE_epsilon = KDE_epsilon
 
         if word_encoder.lower() == 'ulmfit':
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
@@ -213,11 +214,7 @@ class HCapsNet(nn.Module):
 
         self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps,
                                             num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
-                                            lambda_reg_caps = lambda_reg_caps)
-        # self.out = nn.Linear(sent_out, num_classes)
-        # self.bn = nn.BatchNorm1d(sent_out)
-        self.drop = nn.Dropout(dropout)
-
+                                            lambda_reg_caps = lambda_reg_caps, KDE_epsilon=KDE_epsilon)
 
     def get_init_params(self):
         # returns the parameters needed to initialize the model as is
@@ -231,6 +228,7 @@ class HCapsNet(nn.Module):
                 "num_caps":self.caps_classifier.num_caps,
                 "dim_caps":self.caps_classifier.dim_caps,
                 "lambda_reg_caps":self.lambda_reg_caps,
+                "KDE_epsilon":self.KDE_epsilon,
                 "num_compressed_caps":self.caps_classifier.num_compressed_caps,
             }
         )
@@ -240,33 +238,28 @@ class HCapsNet(nn.Module):
     def set_embedding(self, embed_table):
         self.sent_encoder.lookup.load_state_dict({'weight': torch.tensor(embed_table)})
 
-
     def forward(self, sents, encoding=None):
-
         # for support of multi-gpu
         n_doc, n_sents, sen_len = sents.size()
         sents = sents.view(-1, sen_len)
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        # sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
-        #         # # stack and pad
-        #         # sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
         sen_encodings = sen_encodings.view(n_doc, n_sents, -1)
-        # get predictions
+        # Encode docs
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
-        # doc_encoding = self.bn(doc_encoding).unsqueeze(1) #self.drop()
+        # Apply capsule
         doc_encoding = doc_encoding.unsqueeze(1)
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
-        if not self.binary_class: # convert probs to log probs
+        if not self.binary_class: # convert probs to log probs for compatibility with CE
             activations = torch.log(activations/(1-activations))
 
         if encoding is None:
             return activations, word_attn_weight, sent_attn_weight, 0
-
+         # Compute reconstruction loss
         rec_los = self.caps_classifier.reconstruction_loss(encoding, poses)
 
         return activations, word_attn_weight, sent_attn_weight, rec_los

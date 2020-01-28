@@ -1,18 +1,12 @@
 import spacy
 import logging
-from pybacktrans import BackTranslator
-# from json_loader import JSONLoader
 LOGGER = logging.getLogger(__name__)
 import unicodedata
-# import sacremoses as sm
 import re
-from joblib import Parallel, delayed
-from textblob import TextBlob
-from textblob.translate import NotTranslated
-
+# from textblob import TextBlob
+# from textblob.translate import NotTranslated
 from fastai.text.transform import Tokenizer as ULMFiTTokenizer
 from fastai.text.transform import SpacyTokenizer
-
 import html
 
 re1 = re.compile(r'  +')
@@ -214,23 +208,23 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def translate(text, inter_lang, src_lang='en'):
-	""""
-	Translates text to inter_lang and then back to src_lang as means of data augmentation
-	Translation performed using Google Translate API
-	"""
-	if hasattr(text, "decode"):
-		text = text.decode("utf-8")
-
-	text = TextBlob(text)
-	try:
-		text = text.translate(to=inter_lang)
-		text = text.translate(to=src_lang)
-	except NotTranslated:
-		print('NOT TRANSLATED')
-		pass
-
-	return str(text)
+# def translate(text, inter_lang, src_lang='en'):
+# 	""""
+# 	Translates text to inter_lang and then back to src_lang as means of data augmentation
+# 	Translation performed using Google Translate API
+# 	"""
+# 	if hasattr(text, "decode"):
+# 		text = text.decode("utf-8")
+#
+# 	text = TextBlob(text)
+# 	try:
+# 		text = text.translate(to=inter_lang)
+# 		text = text.translate(to=src_lang)
+# 	except NotTranslated:
+# 		print('NOT TRANSLATED')
+# 		pass
+#
+# 	return str(text)
 
 
 class TextPreprocessor(object):

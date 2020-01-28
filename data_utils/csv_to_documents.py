@@ -1,6 +1,6 @@
 import pandas as pd
 from skmultilearn.model_selection import iterative_train_test_split
-from imblearn.over_sampling import RandomOverSampler
+# from imblearn.over_sampling import RandomOverSampler
 from document_model import Document, TextPreprocessor
 import os
 import pickle
@@ -92,9 +92,9 @@ def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure
 		X = df[['text', 'target']].values
 		y = df[[col for col in df.columns if target_prefix in col]].values
 
-		if balance_dataset:
-			ros = RandomOverSampler(random_state=42)
-			X, y = ros.fit_resample(X, y)
+		# if balance_dataset:
+		# 	ros = RandomOverSampler(random_state=42)
+		# 	X, y = ros.fit_resample(X, y)
 
 		X, y, X_test, y_test = iterative_train_test_split(X, y, test_size=test_percentage)
 

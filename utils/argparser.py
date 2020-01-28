@@ -9,10 +9,10 @@ def get_parser():
 						is_config_file=True,
 						help='config file path')
 	parser.add_argument("--do_train",
-						action='store_false',
+						action='store_true',
 						help="Whether to run training.")
 	parser.add_argument("--do_eval",
-						action='store_false',
+						action='store_true',
 						help="Whether to run eval on the dev set.")
 	parser.add_argument("--pretrained_path",
 						default=None,
@@ -122,6 +122,9 @@ def get_parser():
 	parser.add_argument("--lambda_reg_caps",
 						type=float,
 						help="Penalty weight for reconstruction loss")
+	parser.add_argument("--KDE_epsilon",
+						type=float,
+						help="Stopping threshold for capsule routing expressed as difference in Kernel Density Estimation loss")
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
 						action='store_true',
@@ -144,7 +147,7 @@ def get_parser():
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--restructure_docs",
-						action='store_false',
+						action='store_true',
 						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
 	parser.add_argument("--dataset_name",
 						default='imdb',
