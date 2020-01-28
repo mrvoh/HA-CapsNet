@@ -38,7 +38,8 @@ pip install -r requirements.txt
 ```
 
 # How to use
-Configargparse
+Below all parameters/settings are discussed per respective topic. The total of parameters and a set of example values can be found in the config file, ```parameters.ini```. All parameters can be altered by either adjusting its value in the config file or by passing a value on the command line, e.g. ```python main.py --train_batch_size 32```.
+
 ## Data and preprocessing
 ### Parameters
 ```
