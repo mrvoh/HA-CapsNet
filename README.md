@@ -56,11 +56,11 @@ label_to_idx_path = dataset/trec/label_to_idx.json  # Where to load/store label 
 [Preprocessing]
 preprocess_all = false 			# Create new dataset
 dataset_name = trec 			# Name of dataset to create
-write_data_dir = dataset/trec 	# Where to store created dataset
+write_data_dir = dataset/trec 	    # Where to store created dataset
 restructure_docs = true 		# Restructure text to be more equal in sequence lengths within doc
 balance_dataset = true 			# only for parsing from sheet (csv/xlsx)
-max_seq_len = 100 				# cut-off value for restructuring docs
-min_freq_word = 2 				# Minimal frequency for a word to be considered
+max_seq_len = 100 		# cut-off value for restructuring docs
+min_freq_word = 2 		# Minimal frequency for a word to be considered
 percentage_train = 0.8	 		# Percentage of data to use for training
 percentage_dev = 0.0 			# Percentage of data to use for development (sheet parsing only)
 ```
