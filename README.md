@@ -2,6 +2,12 @@
 ##  Hierarchical Capsule Networks with Attention for Document Classification
 Intro
 
+## Contents
+| Section | Description |
+|-|-|
+| [Theoretical background](#theoretical-background) | Theoretical building blocks of this repo |
+| [Setup](#setup) | How to setup a working environment |
+
 # Theoretical background
 - Towards Scalable and reliable Capsule Networks
 - Hierarchical Attention Networks
