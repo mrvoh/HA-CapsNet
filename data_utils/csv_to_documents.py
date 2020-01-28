@@ -1,5 +1,6 @@
 import pandas as pd
 from skmultilearn.model_selection import iterative_train_test_split
+from imblearn.over_sampling import RandomOverSampler
 from document_model import Document, TextPreprocessor
 import os
 import pickle
@@ -53,7 +54,7 @@ def docs_to_sheet(in_path, out_path, label_to_idx_path, use_excel = False, delim
 
 def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure_doc=True, max_seq_len=50,
 				  use_ulmfit=False, delimiter=',', encoding='utf-8', use_excel=True, text_cols='text', target_prefix='topic_',
-				  binary_class=True, split_val='_'):
+				  binary_class=True, split_val='_', balance_dataset = True):
 	assert 0 < dev_percentage < 1, "the percentage of data to be used for dev should be between 0 and 1."
 	assert 0 < test_percentage < 1, "the percentage of data to be used for dev should be between 0 and 1."
 	assert dev_percentage + test_percentage < 1, "the percentage used for dev and test should be less than 1."
@@ -91,6 +92,10 @@ def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure
 		X = df[['text', 'target']].values
 		y = df[[col for col in df.columns if target_prefix in col]].values
 
+		if balance_dataset:
+			ros = RandomOverSampler(random_state=42)
+			X, y = ros.fit_resample(X, y)
+
 		X, y, X_test, y_test = iterative_train_test_split(X, y, test_size=test_percentage)
 
 		discounted_dev_percentage = dev_percentage / (1. - test_percentage)
@@ -111,16 +116,5 @@ def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure
 
 		with open(os.path.join(out_dir, name + '.pkl'), 'wb') as f:
 			pickle.dump(docs, f)
-
-
-
-if __name__ == "__main__":
-
-	in_path = r'C:\Users\nvanderheijden\Documents\Regminer\regminer-topic-modelling\modeling\train_filtered.xlsx'
-	out_path = r'dataset\regminer'
-	label_to_idx_path = os.path.join(out_path, 'label_to_idx.json')
-	# sheet_to_docs(in_path, out_path, 0.1, 0.2)
-
-	docs_to_sheet(os.path.join(out_path, 'dev.pkl'), 'test.csv', label_to_idx_path, use_excel=False)
 
 

@@ -34,7 +34,7 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
-def main(do_save=True):
+def main(use_prog_bar=True):
 	#########################################################################################
 	# ARGUMENT PARSING
 	#########################################################################################
@@ -118,14 +118,14 @@ def main(do_save=True):
 			parse_sheet(args.raw_data_dir, args.write_data_dir, args.percentage_dev,
 						1. - args.percentage_train - args.percentage_dev,
 						use_ulmfit=args.word_encoder.lower() == 'ulmfit',
-						restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
+						restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len,
+						balance_dataset=args.balance_dataset)
 		else:
 			raise AssertionError(
 				'Currently only Reuters, sheets and EUR-Lex57k are supported datasets for preprocessing.')
 
-	# TODO: try considering only N last activations of LM to create doc encoding from
-	# TODO: try gradual unfreezing when training
 	if args.create_doc_encodings:
+		#TODO: more efficient?
 		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx), args.dropout_factor)
 		encoder.eval()
 		for p in [train_path, dev_path, test_path]:
@@ -141,12 +141,13 @@ def main(do_save=True):
 
 	if args.create_wordvecs:  # Create word vectors from train documents
 		print('Creating word vectors')
-		embeddings_from_docs(train_path, word_vec_path, word_vec_dim=args.embed_dim)
+		embeddings_from_docs(train_path, word_vec_path, word_vec_dim=args.embed_dim, min_count=args.min_freq_word, n_epoch = args.ft_n_epoch,
+							 minn=args.ft_minn, maxn=args.ft_maxn, lr = args.ft_lr)
 
 	###########################################################################
-	# FastText Baseline and/or assisting model
+	# FastText Baseline
 	###########################################################################
-	if args.use_fasttext_baseline:  # Parse documents to train file for FastText
+	if args.use_ft_baseline:  # Parse documents to train file for FastText
 
 		ft_learner = FastTextLearner()
 		ft_train_path = os.path.join('dataset', 'ft', 'train.txt')
@@ -160,10 +161,9 @@ def main(do_save=True):
 		# Parse test
 		doc_to_fasttext(test_path, ft_test_path)
 
-		ft_learner.train(ft_train_path, dev_path=ft_dev_path, save_path=args.fasttext_save_path, test_path=ft_test_path,
-						 binary_classification=args.binary_class, optimize_time=args.autotune_time_fasttext, K=args.K)
-
-	# TODO: optionally use FT learner to scope down routing process of capsule based networks.
+		ft_learner.train(ft_train_path, dev_path=ft_dev_path, save_path=args.ft_save_path, test_path=ft_test_path,
+						 binary_classification=args.binary_class, optimize_time=args.ft_autotune_time, K=args.K,
+						 lr=args.ft_lr, epoch=args.ft_n_epoch, minn=args.ft_minn, maxn=args.ft_maxn, minCount = args.min_freq_word )
 
 	###########################################################################
 	# DATA LOADING
@@ -232,7 +232,7 @@ def main(do_save=True):
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
 													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
-													  keep_ulmfit_frozen= args.keep_frozen, do_save=do_save)
+													  keep_ulmfit_frozen= args.keep_frozen)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,
@@ -245,7 +245,7 @@ def main(do_save=True):
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,
-							 num_epochs=args.num_train_epochs, eval_every=args.eval_every)
+							 num_epochs=args.num_train_epochs, eval_every=args.eval_every, use_prog_bar=use_prog_bar)
 
 	###########################################################################
 	# EVAL MODEL

@@ -9,10 +9,10 @@ def get_parser():
 						is_config_file=True,
 						help='config file path')
 	parser.add_argument("--do_train",
-						action='store_false',
+						action='store_true',
 						help="Whether to run training.")
 	parser.add_argument("--do_eval",
-						action='store_false',
+						action='store_true',
 						help="Whether to run eval on the dev set.")
 	parser.add_argument("--pretrained_path",
 						default=None,
@@ -122,6 +122,9 @@ def get_parser():
 	parser.add_argument("--lambda_reg_caps",
 						type=float,
 						help="Penalty weight for reconstruction loss")
+	parser.add_argument("--KDE_epsilon",
+						type=float,
+						help="Stopping threshold for capsule routing expressed as difference in Kernel Density Estimation loss")
 	#	DATA & PRE-PROCESSING ARGS
 	parser.add_argument("--preprocess_all",
 						action='store_true',
@@ -144,25 +147,27 @@ def get_parser():
 						type=int,
 						help="Number of labels to use from the data (filters top N occurring)")
 	parser.add_argument("--restructure_docs",
-						action='store_false',
+						action='store_true',
 						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
+	parser.add_argument("--balance_dataset",
+						action='store_true',
+						help="Whether to oversample minority classes to balance the dataset. Note: only for parsing from sheets (csv/xlsx).")
 	parser.add_argument("--dataset_name",
 						default='imdb',
 						type=str,
 						required=False,
 						help="Name of the dataset.")
 	parser.add_argument("--percentage_train",
-						default=0.8,
+						default=1.0,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--percentage_dev",
-						default=0.2,
+						default=0.0,
 						type=float,
 						help="Percentage of train set to actually use for training when no train/dev/test split is given in data.")
 	parser.add_argument("--write_data_dir",
-						default='dataset\\imdb-full',
 						type=str,
-						required=False,
+						required=True,
 						help="Where to write the parsed data to.")
 	parser.add_argument("--num_backtranslations",
 						default=1,
@@ -207,20 +212,38 @@ def get_parser():
 	parser.add_argument("--min_freq_word",
 						type=int,
 						help="Minimum nr of occurrences before being assigned a word vector")
-
-	#	OTHER ARGS
-	parser.add_argument("--use_fasttext_baseline",
+	# FASTTEXT
+	parser.add_argument("--use_ft_baseline",
 						action='store_true',
 						help="Whether to use a FastText model for baseline purposes or not.")
-	parser.add_argument("--autotune_time_fasttext",
+	parser.add_argument("--ft_autotune_time",
 						default=None,
 						type=int,
 						help="How many seconds to optimize fasttext hyperparams. Set to None to not perform autotuning")
-	parser.add_argument("--fasttext_save_path",
+	parser.add_argument("--ft_save_path",
 						default=os.path.join('models', 'fasttext.model'),
 						type=str,
 						required=False,
-						help="The path where to dump logging.")
+						help="The path where to save FastText model.")
+	parser.add_argument("--ft_n_epoch",
+						type=int,
+						required=False,
+						help="Nr of epochs to train FastText model.")
+	parser.add_argument("--ft_minn",
+						type=int,
+						required=False,
+						help="Min nr of characters for character ngrams")
+	parser.add_argument("--ft_maxn",
+						type=int,
+						required=False,
+						help="Max nr of characters for character ngrams")
+	parser.add_argument("--ft_lr",
+						type=float,
+						required=False,
+						help="Learning rate to train ")
+
+	#	OTHER ARGS
+
 
 	parser.add_argument("--log_path",
 						default='log.txt',

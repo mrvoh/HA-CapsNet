@@ -9,6 +9,7 @@ import configparser
 import gc
 from collections import OrderedDict
 from main import main as train_eval
+from imblearn.over_sampling import RandomOverSampler
 
 def write_interm_results(params, loss):
 	global log_path
@@ -19,7 +20,6 @@ def write_interm_results(params, loss):
 		header += " | ".join(k for k in params.keys())
 		f.write(header + '\n')
 		lengths = [len(head) for head in header.split('|')]
-
 
 		result = loss
 		vals = [v[0] for k,v in params.items()]
@@ -33,7 +33,8 @@ def write_interm_results(params, loss):
 
 def set_params(params, config_path):
 
-	params['num_compressed_caps'] = int(params['num_compressed_caps'] )
+	for param in ['num_compressed_caps', 'min_freq_word', 'sent_hidden']:
+		params[param] = int(params[param])
 	# reads in config file and overwrites params for optimization
 	config = configparser.ConfigParser()
 	config.optionxform = str
@@ -65,6 +66,7 @@ def objective(params):
 	X = df.index
 	y = df[[col for col in df.columns if col != 'index']].values
 	del df
+
 	k_fold = IterativeStratification(n_splits=K, order=1)
 
 	# get docs
@@ -101,11 +103,10 @@ def objective(params):
 	with open('trials_tmp.pkl', 'wb') as f:
 		pickle.dump(trials, f)
 
+	return {'loss': 1-np.mean(scores), 'status': STATUS_OK}
 
-	return {'loss':1-np.mean(scores), 'status':STATUS_OK}
 
 if __name__ == '__main__':
-
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--max_evals",
@@ -113,14 +114,14 @@ if __name__ == '__main__':
 						type=int,
 						help="Total nr of optimization steps.")
 	parser.add_argument("--K",
-						default=3,
+						default=2,
 						type=int,
 						help="Number of splits for cross validation")
 	parser.add_argument("--preload_trials",
 						action='store_true',
 						help="Whether to preload an existing trials object.")
 	parser.add_argument("--in_trials_path",
-						default='trials.pkl',
+						default='trials_tmp.pkl',
 						type=str,
 						required=False,
 						help="Path of trials object to read in.")
@@ -140,7 +141,7 @@ if __name__ == '__main__':
 						required=False,
 						help="Path from where to read the config for training.")
 	parser.add_argument("--data_path",
-						default=os.path.join('dataset','reuters','dev.pkl'),
+						default=os.path.join('dataset','reuters','train.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
@@ -170,17 +171,18 @@ if __name__ == '__main__':
 
 
 	###########################################
-
-
-
 	# define search space
 	space = {
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
 		'weight_decay':hp.loguniform('weight_decay', np.log(1e-5), np.log(0.1)),
-		'dropout_caps':hp.uniform('dropout_caps', 0.25, 0.75),
+		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.6),
 		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-2)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
-		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1)
+		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
+		'label_value':hp.uniform('label_value', 0.9, 1.0),
+		'sent_hidden':hp.uniform('sent_hidden', 25, 200),
+		'min_freq_word':hp.quniform('min_freq_word', 1, 50,1),
+		'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
 	}
 
 	# Create Trials object to log the performance
@@ -194,28 +196,29 @@ if __name__ == '__main__':
 		trials = Trials()
 
 	# perform optimization
-	# try: # to be sure that trials object will be saved
-	best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
-	# except:
-	# 	pass
+	try: # to be sure that trials object will be saved
+		best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
+	except:
+		with open(out_trials_path, 'wb') as f:
+			pickle.dump(trials, f)
 	# Store trials
 
 	with open(out_trials_path, 'wb') as f:
 		pickle.dump(trials, f)
 
-	# with open(log_path,'w') as f:
-	# 	header = "Loss | "
-	# 	header += " | ".join(k for k in trials.trials[0]['misc']['vals'].keys())
-	# 	f.write(header + '\n')
-	# 	lengths = [len(head) for head in header.split('|')]
-	# 	for trial in trials.trials:
-	# 		result = trial['result']['loss']
-	# 		vals = [v[0] for k,v in trial['misc']['vals'].items()]
-	#
-	# 		to_write = ["{0:.03f} ".format(result)]
-	# 		to_write.extend(["{0:.03f}".format(v) for v in vals])
-	# 		for field, length in zip(to_write, lengths):
-	# 			f.write(field.ljust(length+1))
-	# 		f.write('\n')
-	# 		# f.write("{:03f}".format(result) + )
-			# f.write(' '.join() + '\n')
+	with open(log_path,'w') as f:
+		header = "Loss | "
+		header += " | ".join(k for k in trials.trials[0]['misc']['vals'].keys())
+		f.write(header + '\n')
+		lengths = [len(head) for head in header.split('|')]
+		for trial in trials.trials:
+			result = trial['result']['loss']
+			vals = [v[0] for k,v in trial['misc']['vals'].items()]
+
+			to_write = ["{0:.03f} ".format(result)]
+			to_write.extend(["{0:.03f}".format(v) for v in vals])
+			for field, length in zip(to_write, lengths):
+				f.write(field.ljust(length+1))
+			f.write('\n')
+			f.write("{:03f}".format(result))
+			f.write(' '.join() + '\n')

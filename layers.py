@@ -420,10 +420,10 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	return poses, activations
 
 
-def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
+def Adaptive_KDE_routing(batch_size, b_ij, u_hat, leaky_softmax=True, epsilon=0.05):
 	last_loss = 0.0
 	while True:
-		if False:
+		if leaky_softmax:
 			leak = torch.zeros_like(b_ij).sum(dim=2, keepdim=True)
 			leaky_logits = torch.cat((leak, b_ij),2)
 			leaky_routing = F.softmax(leaky_logits, dim=2)
@@ -441,7 +441,7 @@ def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
 		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
 		kde_loss = np.log(kde_loss.item())
 
-		if abs(kde_loss - last_loss) < 0.05:
+		if abs(kde_loss - last_loss) < epsilon:
 			break
 		else:
 			last_loss = kde_loss
@@ -501,7 +501,7 @@ class PrimaryCaps(nn.Module):
 		return poses, activations
 
 class FCCaps(nn.Module):
-	def __init__(self, is_AKDE, output_capsule_num, input_capsule_num, in_channels, out_channels):
+	def __init__(self, is_AKDE, output_capsule_num, input_capsule_num, in_channels, out_channels, KDE_epsilon=0.05):
 		super(FCCaps, self).__init__()
 
 		self.in_channels = in_channels
@@ -510,6 +510,7 @@ class FCCaps(nn.Module):
 		self.output_capsule_num = output_capsule_num
 
 		self.W1 = nn.Parameter(torch.FloatTensor(1, input_capsule_num, output_capsule_num, out_channels, in_channels))
+		self.epsilon = KDE_epsilon
 		torch.nn.init.xavier_uniform_(self.W1)
 
 		self.is_AKDE = is_AKDE
@@ -528,7 +529,7 @@ class FCCaps(nn.Module):
 		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
 
 		if self.is_AKDE:
-			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
+			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat, epsilon=self.epsilon)
 		else:
 			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
 			poses, activations = KDE_routing(batch_size, b_ij, u_hat)
@@ -555,7 +556,7 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps, lambda_reg_caps):
+	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps, lambda_reg_caps, KDE_epsilon):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
@@ -573,9 +574,8 @@ class CapsNet_Text(nn.Module):
 		torch.nn.init.xavier_uniform_(self.W_doc)
 
 		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,
-								  in_channels=num_caps, out_channels=num_caps)
+								  in_channels=num_caps, out_channels=num_caps, KDE_epsilon=KDE_epsilon)
 
-		#TODO: test dropout
 		self.drop = nn.Dropout2d(p=dropout_caps)
 
 		# DOC RECONSTRUCTOR
