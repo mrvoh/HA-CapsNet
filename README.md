@@ -44,11 +44,11 @@ Below all parameters/settings are discussed per respective topic. The total of p
 ### Parameters
 ```
 [Data]
-train_path = dataset/trec/train.pkl       # Path with preprocessed documents for training
-dev_path = dataset/trec/dev.pkl 					          # Path with preprocessed documents for development
-test_path = dataset/trec/test.pkl 					        # Path with preprocessed documents for testing
-preload_word_to_idx = false 						            # Load or create new word mapping
-word_to_idx_path = dataset/trec/stoi1.json			    # Where to load/store word mapping
+train_path = dataset/trec/train.pkl             # Path with preprocessed documents for training
+dev_path = dataset/trec/dev.pkl 					      # Path with preprocessed documents for development
+test_path = dataset/trec/test.pkl 					    # Path with preprocessed documents for testing
+preload_word_to_idx = false 						# Load or create new word mapping
+word_to_idx_path = dataset/trec/stoi1.json			# Where to load/store word mapping
 label_to_idx_path = dataset/trec/label_to_idx.json    # Where to load/store label mapping
 
 
