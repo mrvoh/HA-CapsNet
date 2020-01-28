@@ -72,13 +72,13 @@ percentage_dev = 0.0 			# Percentage of data to use for development (sheet parsi
 ### Parameters
 ```
 [Training]
-do_train = true 		# Whether to train the model
-do_eval = true 			# Whether to evaluate on test set
+do_train = true           # Whether to train the model
+do_eval = true            # Whether to evaluate on test set
 binary_class = false 			# Whether current classification problem is binary
 train_batch_size = 16 			# Batch size to train on
 eval_batch_size = 32 			# Batch size for evaluation
 learning_rate = 0.0025 			# Learning rate
-dropout = 0.33 	        # Dropout between sent encoder and doc encoder
+dropout = 0.33 	                # Dropout between sent encoder and doc encoder
 num_train_epochs = 30 			# Number of epochs to train for
 eval_every = 272 	# Evaluate on dev set after eval_every training updates
 K = 1 			# DEPRECATED
