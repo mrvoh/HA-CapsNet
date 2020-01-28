@@ -37,10 +37,61 @@ cd HCapsNet
 pip install -r requirements.txt
 ```
 
-# How to use (main.py)
-- Data & Preprocessing
-- Training
-- Evaluation
+# How to use
+Configargparse
+## Data and preprocessing
+### Parameters
+```
+[DataAndPreprocessing]
+preprocess_all = false
+train_path = dataset/trec/train.pkl
+dev_path = dataset/trec/dev.pkl
+test_path = dataset/trec/test.pkl
+write_data_dir = dataset/trec
+word_vec_path = word vectors/wiki.en/wiki.en.bin
+preload_word_to_idx = false
+word_to_idx_path = dataset/trec/stoi1.json
+label_to_idx_path = dataset/trec/label_to_idx.json
+min_freq_word = 2
+dataset_name = trec
+max_seq_len = 100
+percentage_train = 0.8
+percentage_dev = 0.0
+```
+
+### Document model
+
+### Adding custom datasets
+## Training/evaluating
+### Parameters
+```
+[Training]
+binary_class = false
+train_batch_size = 16
+eval_batch_size = 32
+learning_rate = 0.0025
+dropout = 0.3163139487152957
+num_train_epochs = 30
+eval_every = 272
+K = 1 # DEPRECATED
+weight_decay = 2.43624658089963e-05
+label_value = 0.9680114815754679
+
+[Model]
+model_name = Hcapsnet
+word_encoder = gru
+sent_encoder = gru
+use_glove = false
+embed_dim = 300
+word_hidden = 100
+sent_hidden = 100
+```
+### Logging
+log file
+class report
+tensorboard
+
+
 # Using FastText
 - pretrained/custom word vecs
 
