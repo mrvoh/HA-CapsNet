@@ -118,14 +118,14 @@ def main(use_prog_bar=True):
 			parse_sheet(args.raw_data_dir, args.write_data_dir, args.percentage_dev,
 						1. - args.percentage_train - args.percentage_dev,
 						use_ulmfit=args.word_encoder.lower() == 'ulmfit',
-						restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
+						restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len,
+						balance_dataset=args.balance_dataset)
 		else:
 			raise AssertionError(
 				'Currently only Reuters, sheets and EUR-Lex57k are supported datasets for preprocessing.')
 
-	# TODO: try considering only N last activations of LM to create doc encoding from
-	# TODO: try gradual unfreezing when training
 	if args.create_doc_encodings:
+		#TODO: more efficient?
 		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx), args.dropout_factor)
 		encoder.eval()
 		for p in [train_path, dev_path, test_path]:
@@ -145,7 +145,7 @@ def main(use_prog_bar=True):
 							 minn=args.ft_minn, maxn=args.ft_maxn, lr = args.ft_lr)
 
 	###########################################################################
-	# FastText Baseline and/or assisting model
+	# FastText Baseline
 	###########################################################################
 	if args.use_ft_baseline:  # Parse documents to train file for FastText
 
@@ -164,8 +164,6 @@ def main(use_prog_bar=True):
 		ft_learner.train(ft_train_path, dev_path=ft_dev_path, save_path=args.ft_save_path, test_path=ft_test_path,
 						 binary_classification=args.binary_class, optimize_time=args.ft_autotune_time, K=args.K,
 						 lr=args.ft_lr, epoch=args.ft_n_epoch, minn=args.ft_minn, maxn=args.ft_maxn, minCount = args.min_freq_word )
-
-	# TODO: optionally use FT learner to scope down routing process of capsule based networks.
 
 	###########################################################################
 	# DATA LOADING

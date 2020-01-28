@@ -21,7 +21,6 @@ def write_interm_results(params, loss):
 		f.write(header + '\n')
 		lengths = [len(head) for head in header.split('|')]
 
-
 		result = loss
 		vals = [v[0] for k,v in params.items()]
 
@@ -56,7 +55,7 @@ def set_params(params, config_path):
 def objective(params):
 	# return {'loss': 1, 'status': STATUS_OK}
 	# objective fn to be minimized
-	global data_path, label_to_idx_path, K, config_path, trials, balance_dataset
+	global data_path, label_to_idx_path, K, config_path, trials
 
 	# get stratisfied split
 	df = docs_to_sheet(data_path, 'tmp.csv', label_to_idx_path)
@@ -172,9 +171,6 @@ if __name__ == '__main__':
 
 
 	###########################################
-
-
-
 	# define search space
 	space = {
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
@@ -184,8 +180,8 @@ if __name__ == '__main__':
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
 		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
-		'sent_hidden':hp.uniform('sent_hidden', 50, 200),
-		'min_freq_word':hp.uniform('min_freq_word', 1, 50),
+		'sent_hidden':hp.uniform('sent_hidden', 25, 200),
+		'min_freq_word':hp.quniform('min_freq_word', 1, 50,1),
 		'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
 	}
 
@@ -200,28 +196,29 @@ if __name__ == '__main__':
 		trials = Trials()
 
 	# perform optimization
-	# try: # to be sure that trials object will be saved
-	best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
-	# except:
-	# 	pass
+	try: # to be sure that trials object will be saved
+		best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
+	except:
+		with open(out_trials_path, 'wb') as f:
+			pickle.dump(trials, f)
 	# Store trials
 
 	with open(out_trials_path, 'wb') as f:
 		pickle.dump(trials, f)
 
-	# with open(log_path,'w') as f:
-	# 	header = "Loss | "
-	# 	header += " | ".join(k for k in trials.trials[0]['misc']['vals'].keys())
-	# 	f.write(header + '\n')
-	# 	lengths = [len(head) for head in header.split('|')]
-	# 	for trial in trials.trials:
-	# 		result = trial['result']['loss']
-	# 		vals = [v[0] for k,v in trial['misc']['vals'].items()]
-	#
-	# 		to_write = ["{0:.03f} ".format(result)]
-	# 		to_write.extend(["{0:.03f}".format(v) for v in vals])
-	# 		for field, length in zip(to_write, lengths):
-	# 			f.write(field.ljust(length+1))
-	# 		f.write('\n')
-	# 		# f.write("{:03f}".format(result) + )
-			# f.write(' '.join() + '\n')
+	with open(log_path,'w') as f:
+		header = "Loss | "
+		header += " | ".join(k for k in trials.trials[0]['misc']['vals'].keys())
+		f.write(header + '\n')
+		lengths = [len(head) for head in header.split('|')]
+		for trial in trials.trials:
+			result = trial['result']['loss']
+			vals = [v[0] for k,v in trial['misc']['vals'].items()]
+
+			to_write = ["{0:.03f} ".format(result)]
+			to_write.extend(["{0:.03f}".format(v) for v in vals])
+			for field, length in zip(to_write, lengths):
+				f.write(field.ljust(length+1))
+			f.write('\n')
+			f.write("{:03f}".format(result))
+			f.write(' '.join() + '\n')

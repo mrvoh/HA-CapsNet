@@ -149,6 +149,9 @@ def get_parser():
 	parser.add_argument("--restructure_docs",
 						action='store_true',
 						help="Whether to restructure docs such that sentences are split/combined to evenly spread words over sequences.")
+	parser.add_argument("--balance_dataset",
+						action='store_true',
+						help="Whether to oversample minority classes to balance the dataset. Note: only for parsing from sheets (csv/xlsx).")
 	parser.add_argument("--dataset_name",
 						default='imdb',
 						type=str,
