@@ -44,12 +44,12 @@ Below all parameters/settings are discussed per respective topic. The total of p
 ### Parameters
 ```
 [Data]
-train_path = dataset/trec/train.pkl 				# Path with preprocessed documents for training
-dev_path = dataset/trec/dev.pkl 					# Path with preprocessed documents for development
-test_path = dataset/trec/test.pkl 					# Path with preprocessed documents for testing
-preload_word_to_idx = false 						# Load or create new word mapping
-word_to_idx_path = dataset/trec/stoi1.json			# Where to load/store word mapping
-label_to_idx_path = dataset/trec/label_to_idx.json  # Where to load/store label mapping
+train_path = dataset/trec/train.pkl                       # Path with preprocessed documents for training
+dev_path = dataset/trec/dev.pkl                           # Path with preprocessed documents for development
+test_path = dataset/trec/test.pkl                         # Path with preprocessed documents for testing
+preload_word_to_idx = false                               # Load or create new word mapping
+word_to_idx_path = dataset/trec/stoi1.json                # Where to load/store word mapping
+label_to_idx_path = dataset/trec/label_to_idx.json        # Where to load/store label mapping
 
 
 
@@ -76,23 +76,23 @@ do_train = true                     # Whether to train the model
 do_eval = true                      # Whether to evaluate on test set
 binary_class = false                # Whether current classification problem is binary
 train_batch_size = 16               # Batch size to train on
-eval_batch_size = 32 			# Batch size for evaluation
-learning_rate = 0.0025 			# Learning rate
-dropout = 0.33 	                # Dropout between sent encoder and doc encoder
-num_train_epochs = 30 			# Number of epochs to train for
-eval_every = 272 	# Evaluate on dev set after eval_every training updates
-K = 1 			# DEPRECATED
-weight_decay = 0.001 			# L2 weight regularization weight
-label_value = 0.95 	# Label value for computing loss (binary classification only)
+eval_batch_size = 32                # Batch size for evaluation
+learning_rate = 0.0025              # Learning rate
+dropout = 0.33                      # Dropout between sent encoder and doc encoder
+num_train_epochs = 30               # Number of epochs to train for
+eval_every = 272                    # Evaluate on dev set after eval_every training updates
+K = 1                               # DEPRECATED
+weight_decay = 0.001                # L2 weight regularization weight
+label_value = 0.95                  # Label value for computing loss (binary classification only)
 
 [Model]
-model_name = Hcapsnet 	# Name of the model to use
-word_encoder = gru 		# Name of word encoder to use
-sent_encoder = gru 		# Name of sentence encoder to use
-use_glove = false 		# DEPRECATED(?)
-embed_dim = 300 		# Embedding dimension of word vectors
-word_hidden = 100 		# Hidden size of word encoder
-sent_hidden = 100 		# Hidden size of sentence encoder
+model_name = Hcapsnet               # Name of the model to use
+word_encoder = gru                  # Name of word encoder to use
+sent_encoder = gru                  # Name of sentence encoder to use
+use_glove = false                   # DEPRECATED(?)
+embed_dim = 300                     # Embedding dimension of word vectors
+word_hidden = 100                   # Hidden size of word encoder
+sent_hidden = 100                   # Hidden size of sentence encoder
 ```
 ### Logging
 log file
