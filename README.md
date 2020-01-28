@@ -1,5 +1,5 @@
 
-##  Hierarchical Capsule Networks with Attention for Document Classification
+#  Hierarchical Capsule Networks with Attention for Document Classification
 Intro
 
 ## Contents
@@ -7,6 +7,12 @@ Intro
 |-|-|
 | [Theoretical background](#theoretical-background) | Theoretical building blocks of this repo |
 | [Setup](#setup) | How to setup a working environment |
+| [Data and Preprocessing](#data-and-preprocessing) | How to prepare and utilize a (custom) dataset |
+| [Training/evaluating](#training/evaluating) | Train and evaluate a model |
+| [Using FastText](#using-fasttext) | Create custom word vectors or baseline model |
+| [Using ULMFiT](#using-ulmfit) | Using ULMFiT as word encoder and to create document encodings |
+| [Hyperparameter optimization](#hyperparameter-optimization) | Finding optimal hyperparameters using [Hyperopt](https://github.com/hyperopt/hyperopt) |
+| [References](#references) | References for this repo | 
 
 # Theoretical background
 - Towards Scalable and reliable Capsule Networks
@@ -128,21 +134,16 @@ tensorboard
 # Using FastText
 - pretrained/custom word vecs
 
-# Using ULMFiT (optional)
+# Using ULMFiT
 - Train custom language model
 - Usage
 - Document encodings
-
-# Extending to other datasets
-- Document model
-- Custom parser
 
 # Hyperparameter optimization
 - Hyperopt
 - How to use
 
-# Logging
-- Tensorboard
-- Classification reports
+# References
+
 
 
