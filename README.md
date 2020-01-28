@@ -19,7 +19,7 @@ conda env create --name hcapsnet python=3.7
 source activate hcapsnet
 ```
 [3]
-Install PyTorch (>1.1). Please refer to the [PyTorch installation page]([https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/)) for the specifics for your platform.
+Install PyTorch (>1.1). Please refer to the [PyTorch installation page](https://pytorch.org/get-started/locally/) for the specifics for your platform.
 
 [4] Clone the repository:
 ```
