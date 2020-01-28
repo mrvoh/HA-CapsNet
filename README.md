@@ -85,6 +85,14 @@ When **restructure_docs** is set to true, the sentences obtained by the SpaCY to
 Finally, all consecutive sequences are considered once more and if their combined length is smaller than ```max_seq_len``` they are concatenated into one sequence.
 Doing this allows for more efficient training, but can potentially harm performance, although this has not been seen in practice yet.
 ### Adding custom datasets
+Training on your own data is fairly easy and can be done in two manners:
+#### Reading from *.csv
+Reading from *.csv files is supported by setting ```dataset_name = sheet``` in the parameters file. The sheet should contain one column named ```text``` and at least one column which name is preceded by ```topic_ ``` containing a binary indicator for that row whether that topic/label is present for the respective sample.
+
+#### Writing a custom parser
+When reading from a *.csv file does not give enough freedom, a custom parser can be written like the ones in the ```data_utils/ ``` folder. The parser should write a pickled list of Documents (as per ```document_model.py ```) to the ```write_dir``` and preferably also adhere to all other preprocessing variables.
+
+Then, ```main.py``` should be adjusted to include the newly created parser as an option next to the current options.
 ## Training/evaluating
 ### Parameters
 ```
