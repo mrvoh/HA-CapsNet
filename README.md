@@ -51,7 +51,10 @@ See the graph below (taken from the original paper) for a visualization of the m
 
 ![HAN](han.PNG)
 
-## Hierarchical Labelwise Attention Networks
+## Hierarchical Label-Wise Attention Networks
+The hierarchical Labelwise Attention Networks are a mixture of HAN and Label-Wise [Attention Networks](https://www.aclweb.org/anthology/D18-1508/) Instead of a single LSTM-encoder, the hierarchical document encoder from HAN is used and instead of the single self-attention head, one self-attention head per modelled label/class is applied to the contextualized sentence encodings. See below for a visualization of Label-Wise Attention (taken from the original paper).
+![LWAN](lwan.PNG)
+
 ## Hierarchical Capsule Networks
 ## Hierarchical Capsule Networks with Multi-Head Attention
 
