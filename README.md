@@ -5,7 +5,6 @@ This repository provides easy to use hierarchical architectures for document cla
 ## Contents
 | Section | Description |
 |-|-|
-| [Theoretical background](#theoretical-background) | Theoretical building blocks of this repo |
 | [Setup](#setup) | How to setup a working environment |
 | [Architectures](#architectures) | Available models |
 | [Data and Preprocessing](#data-and-preprocessing) | How to prepare and utilize a (custom) dataset |
@@ -14,12 +13,6 @@ This repository provides easy to use hierarchical architectures for document cla
 | [Using ULMFiT](#using-ulmfit) | Using ULMFiT as word encoder and to create document encodings |
 | [Hyperparameter optimization](#hyperparameter-optimization) | Finding optimal hyperparameters using [Hyperopt](https://github.com/hyperopt/hyperopt) |
 | [References](#references) | References for this repo | 
-
-# Theoretical background
-- Towards Scalable and reliable Capsule Networks
-- Hierarchical Attention Networks
-- ULMFiT
-- Dynamic Routing Between Capsules
 
 # Setup
 
@@ -189,9 +182,27 @@ ft_lr = 0.05                                        # Learning rate
 ```
 
 # Using ULMFiT
-- Train custom language model
-- Usage
-- Document encodings
+## As language model
+As an alternative to regular word vectors a (finetuned) [ULMFiT](https://arxiv.org/abs/1801.06146) can be used to create contextualized word embeddings in all of the available architectures by setting ```word_encoder = ulmfit``` and filling out the respective parameters
+```
+[ULMFiT]
+create_doc_encodings = false                        # Whether to create document encodings for the current dataset
+ulmfit_pretrained_path = ulmfit/reuters_lm.pth      # Path to load ULMFiT encoder from
+dropout_factor = 1.5                                # Dropout factor as described in fastai documentation
+gradual_unfreeze = true                             # Unfreeze ULMFiT encoder one epoch at a time when training
+keep_frozen = false                                 # Keep ULMFiT encoder static/untrainable
+```
+FastAI provides both an implementation of ULMFiT and [tutorials](https://docs.fast.ai/text.html#Quick-Start:-Training-an-IMDb-sentiment-model-with-ULMFiT) on how to finetune a language model. Make sure to export the model using ```learn.save_encoder('your_model_name')``` and also export the word mapping. This can be done as follows:
+```
+itos = learn.data.vocab.itos # IndexTOString
+stoi = {v:ix for ix,v in enumerate(itos)} #StringTOIndex
+with open('imdb_stoi.json', 'w') as f:
+        json.dump(stoi, f)
+```
+Export both the encoder and the word mapping to this repo and be sure to set ```preload_word_to_idx = true```.
+
+## To create document encodings
+
 
 # Hyperparameter optimization
 In order to find (near-)optimal hyperparameters for your task at hand, ```hyper_opt.py``` can be used. It is implemented using the [Hyperopt](https://github.com/hyperopt/hyperopt) library, which needs te be installed before usage by running ```pip install hyperopt```.
