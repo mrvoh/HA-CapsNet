@@ -1,12 +1,13 @@
 
 #  Hierarchical Capsule Networks with Attention for Document Classification
-Intro
+This repository provides easy to use hierarchical architectures for document classification.
 
 ## Contents
 | Section | Description |
 |-|-|
 | [Theoretical background](#theoretical-background) | Theoretical building blocks of this repo |
 | [Setup](#setup) | How to setup a working environment |
+| [Architectures](#architectures) | Available models |
 | [Data and Preprocessing](#data-and-preprocessing) | How to prepare and utilize a (custom) dataset |
 | [Training/evaluating](#training/evaluating) | Train and evaluate a model |
 | [Using FastText](#using-fasttext) | Create custom word vectors or baseline model |
@@ -42,6 +43,11 @@ cd HCapsNet
 ```
 pip install -r requirements.txt
 ```
+# Architectures
+HAN
+HGRULWAN
+HCapsNet
+HCapsNetMultiHeadAtt
 
 # How to use
 Below all parameters/settings are discussed per respective topic. The total of parameters and a set of example values can be found in the config file, ```parameters.ini```. All parameters can be altered by either adjusting its value in the config file or by passing a value on the command line, e.g. ```python main.py --train_batch_size 32```.
@@ -105,6 +111,7 @@ Then, ```main.py``` should be adjusted to include the newly created parser as an
 [Training]
 do_train = true                     # Whether to train the model
 do_eval = true                      # Whether to evaluate on test set
+save_dir = models                   # Directory to save models during training
 binary_class = false                # Whether current classification problem is binary
 train_batch_size = 16               # Batch size to train on
 eval_batch_size = 32                # Batch size for evaluation
@@ -120,16 +127,20 @@ label_value = 0.95                  # Label value for computing loss (binary cla
 model_name = Hcapsnet               # Name of the model to use
 word_encoder = gru                  # Name of word encoder to use
 sent_encoder = gru                  # Name of sentence encoder to use
-use_glove = false                   # DEPRECATED(?)
 embed_dim = 300                     # Embedding dimension of word vectors
 word_hidden = 100                   # Hidden size of word encoder
 sent_hidden = 100                   # Hidden size of sentence encoder
 ```
 ### Logging
-log file
-class report
-tensorboard
-
+In order to track the training process, multiple ways of logging are provided. Firstly, all training/evaluating related terminal output is saved in a log file. Secondly, at every evaluation a report is written with precision and recall metrics on all classes.
+Finally, [Tensorboard](https://www.tensorflow.org/tensorboard) can be used to track training (almost) in real time. Vital metrics such as training and development loss are captured and can be inspected in the Tensorboard interface.
+The following parameters can be used to alter write locations of the logging methods:
+```
+[Logging]
+log_path = log.txt                     # Path to write terminal log to
+class_report_dir = class_reports       # Dir to write classification reports to
+tensorboard_dir = runs                 # Dir to write Tensorboard log files to
+```
 
 # Using FastText
 - pretrained/custom word vecs
