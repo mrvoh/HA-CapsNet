@@ -61,7 +61,7 @@ Instead of modeling a text as a bag of word n-grams as per original paper, we mo
 ![CapsNet](capsnet.PNG)
 
 ## Hierarchical Capsule Networks with Multi-Head Attention
-The final available architecture is an extension of HCapsNet. Instead of using one self-attention head to create the document encoding, N attention heads are used, resulting in an N x D_{sen} document representation instead of the original 1 x D_{sen} vector representation, with D_{sen} the size of the sentence encodings.
+The final available architecture is an extension of HCapsNet. Instead of using one self-attention head to create the document encoding, N attention heads are used, resulting in an $N x D_{sen}$ document representation instead of the original $1 x D_{sen}$ vector representation, with $D_{sen}$ the size of the sentence encodings.
 
 # How to use
 Below all parameters/settings are discussed per respective topic. The total of parameters and a set of example values can be found in the config file, ```parameters.ini```. All parameters can be altered by either adjusting its value in the config file or by passing a value on the command line, e.g. ```python main.py --train_batch_size 32```.
