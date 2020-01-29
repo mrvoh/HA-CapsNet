@@ -164,9 +164,22 @@ ft_lr = 0.05                                        # Learning rate
 - Document encodings
 
 # Hyperparameter optimization
-- Hyperopt
-- How to use
+In order to find (near-)optimal hyperparameters for your task at hand, ```hyper_opt.py``` can be used. It is implemented using the [Hyperopt](https://github.com/hyperopt/hyperopt) library, which needs te be installed before usage by running ```pip install hyperopt```.
+For now, only HCapsNet is supported and the following parameters are optimized over the following intervals:
+| Name | Lower bound | Upper bound | Scale |
+|-|-|-|-|
+| dropout | 0.25 | 0.75 | uniform |
+| weight_decay | 1e-5 | 0.1 | log uniform |
+| sent_hidden | 25 | 200 | discrete uniform |
+| dropout_caps | 0.0 | 0.6 | uniform |
+| lambda_reg_caps | 1e-7 | 1e-2 | log uniform |
+| num_compressed_caps | 50 | 250 | disrete uniform |
+| KDE_epsilon | 0.01 | 0.1 | uniform |
+| dropout_factor | 1.0 | 3.0 | uniform |
+| min_freq_word | 1 | 50 | discrete uniform |
+| label value | 0.9 | 1.0 | uniform |
 
+**NOTE**: Not all hyperparameters listed above will influence the training process at the same time, this depends on the exact architecture chosen via the ```parameters.ini``` file. E.g. ```dropout_factor``` only influences the process when ulmfit is chosen as ```word_encoder```.
 # References
 
 
