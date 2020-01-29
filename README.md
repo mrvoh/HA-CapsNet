@@ -195,6 +195,9 @@ data_path = dataset/trec/train.pkl                      # Dataset to optimize on
 label_to_idx_path = dataset/trec/label_to_idx.json      # Label mapping path
 ```
 After every round of optimization the script stores a Hyperopt-native object containing the information of the optimization so far in ```trials_tmp.pkl ```. This is done to prevent loss of information when optimization is ended prematurely.
+
+**Example usage** ```python hyper_opt.py --data_path dataset/trec/train.pkl --label_to_idx_path dataset/trec/label_to_idx.json ```
+
 # References
 
 
