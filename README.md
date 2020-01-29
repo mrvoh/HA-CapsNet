@@ -155,8 +155,11 @@ lambda_reg_caps = 0.0005            # Weight term of reconstruction loss
 KDE_epsilon = 0.05                  # Stopping criterion for capsule routing
 ```
 **NOTE**: some parameters have a free text field, but the allowed options are limited. Below these parameters are listed with their respective options.
+
 ```model_name```: [han](#hierarchical-attention-networks), [hgrulwan](#hierarchical-label-wise-attention-networks), [hcapsnet](#hierarchical-capsule-networks), [hcapsnetmultiheadatt](#hierarchical-capsule-networks-with-multi-head-attention) 
+
 ```word_encoder```: gru, transformer, ulmfit
+
 ```sent_encoder```: gru, transformer
 
 ### Logging
