@@ -166,6 +166,7 @@ ft_lr = 0.05                                        # Learning rate
 # Hyperparameter optimization
 In order to find (near-)optimal hyperparameters for your task at hand, ```hyper_opt.py``` can be used. It is implemented using the [Hyperopt](https://github.com/hyperopt/hyperopt) library, which needs te be installed before usage by running ```pip install hyperopt```.
 For now, only HCapsNet is supported and the following parameters are optimized over the following intervals:
+
 | Name | Lower bound | Upper bound | Scale |
 |-|-|-|-|
 | dropout | 0.25 | 0.75 | uniform |
