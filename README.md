@@ -181,6 +181,20 @@ For now, only HCapsNet is supported and the following parameters are optimized o
 | label value | 0.9 | 1.0 | uniform |
 
 **NOTE**: Not all hyperparameters listed above will influence the training process at the same time, this depends on the exact architecture chosen via the ```parameters.ini``` file. E.g. ```dropout_factor``` only influences the process when ulmfit is chosen as ```word_encoder```.
+## Usage
+See below the parameters for the hyper optimization with their default values. In order to alter their values, command line arguments have to be used, as demonstrated below.
+```
+max_evals = 50                                          # Number of rounds to optimize for
+K = 3                                                   # Number of folds for cross validation
+preload_trials = false                                  # Whether to continue optimizing from a previous run
+in_trials_path = tmp_trials.pkl                         # Path to read previous trials from
+out_trials = trials.pkl                                 # Path to store trials object
+log_path = opt_log.txt                                  # Path to write overview after optimization
+config_path = parameters.ini                            # Parameters file containing all parameters not altered by optimization
+data_path = dataset/trec/train.pkl                      # Dataset to optimize on
+label_to_idx_path = dataset/trec/label_to_idx.json      # Label mapping path
+```
+After every round of optimization the script stores a Hyperopt-native object containing the information of the optimization so far in ```trials_tmp.pkl ```. This is done to prevent loss of information when optimization is ended prematurely.
 # References
 
 
