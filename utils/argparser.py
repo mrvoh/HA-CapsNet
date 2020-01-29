@@ -254,7 +254,12 @@ def get_parser():
 						default='runs',
 						type=str,
 						required=False,
-						help="The path where to dump logging.")
+						help="The path where to dump logging for Tensorboard.")
+	parser.add_argument("--class_report_dir",
+						default='class_reports',
+						type=str,
+						required=False,
+						help="The path where to dump classification reports.")
 	parser.add_argument("--save_dir",
 						default='models',
 						type=str,

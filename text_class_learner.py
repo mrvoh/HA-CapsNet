@@ -77,7 +77,8 @@ class MultiLabelTextClassifier:
 
 	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
 				 tensorboard_dir = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
-				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
+				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False,
+				 class_report_dir = 'class_reports', **kwargs):
 
 		self.model_name = model_name
 		self.use_doc_encoding = 'caps' in model_name.lower()
@@ -101,6 +102,7 @@ class MultiLabelTextClassifier:
 		self.verbose = verbose
 		self.gradual_unfreeze = gradual_unfeeze
 		self.keep_ulmfit_frozen = keep_ulmfit_frozen
+		self.class_report_dir = class_report_dir
 
 		# Placeholders for attributes to be initialized
 		# TODO: use kwarg arguments downstream  --> or just keep for load method?
@@ -397,7 +399,7 @@ class MultiLabelTextClassifier:
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
 		# Eval dev
 
-		write_path = os.path.join('class_reports', '{}'.format(train_step))
+		write_path = os.path.join(self.class_report_dir, '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
 			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
 
