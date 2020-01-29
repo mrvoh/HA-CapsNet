@@ -56,7 +56,12 @@ The hierarchical Labelwise Attention Networks are a mixture of HAN and Label-Wis
 ![LWAN](lwan.PNG)
 
 ## Hierarchical Capsule Networks
+Hierarchical Capsule Networks (HCapsNet) are the main contribution of this repository. The base of this network is the same as [HAN](#hierarchical-attention-networks), but instead of simply applying a softmax to perform classification, the Capsule Network as described in [Towards Scalable and Reliable Capsule Networks for Challenging NLP Applications](https://www.aclweb.org/anthology/P19-1150/) is used for classification.
+Instead of modeling a text as a bag of word n-grams as per original paper, we model a text/document in a hierarchical manner and apply the Capsule Network to the document encoding. The Capsule Network upsamples each dimension of the document encoding using 1x1 convolutions to create capsules (vector representations of the previously scalar-valued feature). These capsules are consecutively "compressed" for robustness and scalability and then routed to the representation/output layer. The length of each of the capsules of the output layer is interpreted as the probability that that respective class/label is present. See the original paper for a more elaborate explanation. The steps described above are depicted in the graph below (taken from the original paper).
+![CapsNet](capsnet.PNG)
+
 ## Hierarchical Capsule Networks with Multi-Head Attention
+The final available architecture is an extension of HCapsNet. Instead of using one self-attention head to create the document encoding, N attention heads are used, resulting in an N x D_{sen} document representation instead of the original 1 x D_{sen} vector representation, with D_{sen} the size of the sentence encodings.
 
 # How to use
 Below all parameters/settings are discussed per respective topic. The total of parameters and a set of example values can be found in the config file, ```parameters.ini```. All parameters can be altered by either adjusting its value in the config file or by passing a value on the command line, e.g. ```python main.py --train_batch_size 32```.
