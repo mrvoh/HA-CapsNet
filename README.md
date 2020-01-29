@@ -44,10 +44,16 @@ cd HCapsNet
 pip install -r requirements.txt
 ```
 # Architectures
-HAN
-HGRULWAN
-HCapsNet
-HCapsNetMultiHeadAtt
+## Hierarchical Attention Networks
+[Hierarchical Attention Networks (HAN)](https://www.aclweb.org/anthology/N16-1174/) are at the basis of this repository. This model first creates an encoding of each sentence in a document by first contextualizing the word embeddings with some form of an RNN (a GRU in the paper) and then applying self attention to compute a weighted average as sentence embedding (level 1).
+Level 2 of the hierarchy then consists of the same "trick": all sentence embeddings are contextualized using some form of a RNN and then a document encoding is created by applying self attention of the contextualized sentence embeddings and computing a weighted average. This document encoding then serves as an input to a classification layer (softmax) to get the final prediction.
+See the graph below (taken from the original paper) for a visualization of the model.
+
+![HAN](han.PNG)
+
+## Hierarchical Labelwise Attention Networks
+## Hierarchical Capsule Networks
+## Hierarchical Capsule Networks with Multi-Head Attention
 
 # How to use
 Below all parameters/settings are discussed per respective topic. The total of parameters and a set of example values can be found in the config file, ```parameters.ini```. All parameters can be altered by either adjusting its value in the config file or by passing a value on the command line, e.g. ```python main.py --train_batch_size 32```.
