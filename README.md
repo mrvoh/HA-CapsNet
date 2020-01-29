@@ -121,7 +121,6 @@ When reading from a *.csv file does not give enough freedom, a custom parser can
 Then, ```main.py``` should be adjusted to include the newly created parser as an option next to the current options.
 ## Training/evaluating
 ### Parameters
-TODO: explain parameters in hcapsnet and ulmfit section also influence training.
 ```
 [Training]
 do_train = true                     # Whether to train the model
@@ -145,7 +144,21 @@ sent_encoder = gru                  # Name of sentence encoder to use
 embed_dim = 300                     # Embedding dimension of word vectors
 word_hidden = 100                   # Hidden size of word encoder
 sent_hidden = 100                   # Hidden size of sentence encoder
+
+[CapsNet]
+dim_caps = 16                       # Dimension of each capsule
+num_caps = 32                       # Number of Primary Capsules
+num_compressed_caps = 100           # Number of capsules after compression
+num_head_doc = 5                    # Number of self-attention heads for HCapsNetMultiHeadAtt
+dropout_caps = 0.5                  # Dropout probability of capsules before compression
+lambda_reg_caps = 0.0005            # Weight term of reconstruction loss
+KDE_epsilon = 0.05                  # Stopping criterion for capsule routing
 ```
+**NOTE**: some parameters have a free text field, but the allowed options are limited. Below these parameters are listed with their respective options.
+```model_name```: [han](#hierarchical-attention-networks), [hgrulwan](#hierarchical-label-wise-attention-networks), [hcapsnet](#hierarchical-capsule-networks), [hcapsnetmultiheadatt](#hierarchical-capsule-networks-with-multi-head-attention) 
+```word_encoder```: gru, transformer, ulmfit
+```sent_encoder```: gru, transformer
+
 ### Logging
 In order to track the training process, multiple ways of logging are provided. Firstly, all training/evaluating related terminal output is saved in a log file. Secondly, at every evaluation a report is written with precision and recall metrics on all classes.
 Finally, [Tensorboard](https://www.tensorflow.org/tensorboard) can be used to track training (almost) in real time. Vital metrics such as training and development loss are captured and can be inspected in the Tensorboard interface.
