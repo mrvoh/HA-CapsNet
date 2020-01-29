@@ -107,6 +107,7 @@ When reading from a *.csv file does not give enough freedom, a custom parser can
 Then, ```main.py``` should be adjusted to include the newly created parser as an option next to the current options.
 ## Training/evaluating
 ### Parameters
+TODO: explain parameters in hcapsnet and ulmfit section also influence training.
 ```
 [Training]
 do_train = true                     # Whether to train the model
@@ -143,7 +144,19 @@ tensorboard_dir = runs                 # Dir to write Tensorboard log files to
 ```
 
 # Using FastText
-- pretrained/custom word vecs
+The [FastText](https://fasttext.cc/) library is an easy-to-use toolbox for creation of word vectors and text classification. Here it can be used to create custom word vectors on your dataset, utilize pretrained word vectors or as a baseline classifier. Please see the [official documentation](https://github.com/facebookresearch/fastText#building-fasttext) for installation.
+### Parameters
+```
+[FastText]
+word_vec_path = word vectors/custom.bin             # Path to read/write word vectors from/to
+create_wordvecs = true                              # Whether to create custom word vectors on dataset
+use_ft_baseline = false                             # Whether to use FastText as classifier baseline
+ft_save_path = fasttext.model                       # Path to save classifier
+ft_n_epoch = 200                                    # Number of epochs to train (both word vectors and classifier)
+ft_minn = 3                                         # Min number of characters used in char n-grams
+ft_maxn = 6                                         # Max number of characters used in char n-grams
+ft_lr = 0.05                                        # Learning rate
+```
 
 # Using ULMFiT
 - Train custom language model
