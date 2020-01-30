@@ -21,7 +21,7 @@ Instructions here: https://www.anaconda.com/download/
 
 [2] Create virtual environment:
 ```
-conda env create --name hcapsnet python=3.7
+conda create --name hcapsnet python=3.7
 source activate hcapsnet
 ```
 [3]
