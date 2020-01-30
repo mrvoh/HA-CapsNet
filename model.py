@@ -212,7 +212,7 @@ class HCapsNet(nn.Module):
                                                 bidirectional=bidirectional,
                                                 num_layers=num_layers_sen, nhead=nhead_sen)
 
-        self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps,
+        self.caps_classifier = CapsNet_Text(1, sent_out, num_classes, dim_caps=dim_caps, num_caps=num_caps,
                                             num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
                                             lambda_reg_caps = lambda_reg_caps, KDE_epsilon=KDE_epsilon)
 
@@ -250,7 +250,7 @@ class HCapsNet(nn.Module):
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
         # Apply capsule
-        doc_encoding = doc_encoding.unsqueeze(1)
+        doc_encoding = doc_encoding.unsqueeze(2)
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
@@ -295,7 +295,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
         self.doc_encoder = GRUMultiHeadAtt(sent_hidden, word_out, nhead_doc=nhead_doc,
                                            bidirectional=bidirectional, dropout=dropout, aggregate_output=False)
 
-        self.caps_classifier = CapsNet_Text(sent_out, nhead_doc, num_classes,dim_caps=dim_caps, num_caps=num_caps
+        self.caps_classifier = CapsNet_Text(nhead_doc, sent_out, num_classes,dim_caps=dim_caps, num_caps=num_caps
                                             , num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
                                             lambda_reg_caps = lambda_reg_caps)
         # self.out = nn.Linear(sent_out, num_classes)

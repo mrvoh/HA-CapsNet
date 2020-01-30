@@ -405,8 +405,8 @@ class MultiLabelTextClassifier:
 
 		# Eval Train
 		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
-			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K)
-																	# max_samples=len(dataloader_dev))
+			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K,
+																	max_samples=len(dataloader_dev))
 
 		# Save model if best
 		if best_score <= f1_micro_dev:
