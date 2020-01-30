@@ -202,6 +202,10 @@ with open('imdb_stoi.json', 'w') as f:
 Export both the encoder and the word mapping to this repo and be sure to set ```preload_word_to_idx = true```.
 
 ## To create document encodings
+In the [paper](https://arxiv.org/abs/1710.09829) on the first practical application of Capsule Networks the authors use reconstruction loss as a regularization method. An additional decoder is trained along with the network to reconstruct the original input (MNIST images) from the capsule with the highest activation. The distance between the reconstruction and the original image is then taken as a basis for the reconstruction loss.
+In this work we attempt to generalize this approach to the NLP domain by using a finetuned ULMFiT model to create the "base encoding" of a document to compute this loss against. This encoding is created by running the whole document through the model and concatenating a max-pool and average-pool of the encodings of all words. For a more elaborate explanation of the reconstruction loss we refer to the original paper.
+
+Creation of the document encodings is a time consuming task, but only has to be done once per dataset/ULMFiT model combination. This process is started by setting ```create_doc_encodings = true```. The scale/discount factor of this loss is altered by ```lambda_reg_caps ```.
 
 
 # Hyperparameter optimization
