@@ -61,6 +61,15 @@ def main(use_prog_bar=True):
 			if not os.path.exists(dir_to_make):
 				print(dir_to_make)
 				os.makedirs(dir_to_make)
+		if 'path' in arg:
+			p = getattr(args, arg)
+			if p in [None, '']:
+				continue
+			dir_to_make = os.path.dirname(getattr(args, arg))
+
+			if not os.path.exists(dir_to_make) and dir_to_make != '':
+				print(dir_to_make)
+				os.makedirs(dir_to_make)
 	###########################################################################
 	# SANITY CHECKS
 	###########################################################################
