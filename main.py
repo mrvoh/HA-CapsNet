@@ -53,6 +53,15 @@ def main(use_prog_bar=True):
 	# pr.enable()
 
 	###########################################################################
+	# CREATE ALL DIRS IN PARAMETERS FILE IF NOT EXISTS
+	###########################################################################
+	for arg in vars(args):
+		if 'dir' in arg:
+			dir_to_make = getattr(args, arg)
+			if not os.path.exists(dir_to_make):
+				print(dir_to_make)
+				os.makedirs(dir_to_make)
+	###########################################################################
 	# SANITY CHECKS
 	###########################################################################
 
