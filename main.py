@@ -56,7 +56,7 @@ def main(use_prog_bar=True):
 	# SANITY CHECKS
 	###########################################################################
 
-	assert (args.do_train or args.do_eval), "Either do_train and/or do_eval must be chosen"
+	# assert (args.do_train or args.do_eval or a), "Either do_train and/or do_eval must be chosen"
 	assert args.model_name.lower() in ['han', 'hgrulwan', 'hcapsnet',
 									   'hcapsnetmultiheadatt'], "The model (--model_name) can be chosen from: HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt."
 	assert args.word_encoder.lower() in ['gru', 'transformer',
@@ -241,7 +241,7 @@ def main(use_prog_bar=True):
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
 									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps,
-									  binary_class=args.binary_class, dropout_caps=args.dropout_caps)
+									  binary_class=args.binary_class, dropout_caps=args.dropout_caps, KDE_epsilon = args.KDE_epsilon)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

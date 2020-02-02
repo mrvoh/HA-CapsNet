@@ -171,7 +171,7 @@ class MultiLabelTextClassifier:
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
-				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True):
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True, KDE_epsilon = 0.05):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -196,13 +196,13 @@ class MultiLabelTextClassifier:
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
 								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit,
-								  	lambda_reg_caps = lambda_reg_caps, binary_class = binary_class)
+								  	lambda_reg_caps = lambda_reg_caps, binary_class = binary_class, KDE_epsilon=KDE_epsilon)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
 									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit,
-									lambda_reg_caps = lambda_reg_caps, binary_class = binary_class)
+									lambda_reg_caps = lambda_reg_caps, binary_class = binary_class, KDE_epsilon=KDE_epsilon)
 
 		if binary_class:
 			# Initialize training attributes
