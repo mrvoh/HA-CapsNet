@@ -53,10 +53,19 @@ def main(use_prog_bar=True):
 	# pr.enable()
 
 	###########################################################################
+	# CREATE ALL DIRS IN PARAMETERS FILE IF NOT EXISTS
+	###########################################################################
+	for arg in vars(args):
+		if 'dir' in arg:
+			dir_to_make = getattr(args, arg)
+			if not os.path.exists(dir_to_make):
+				print(dir_to_make)
+				os.makedirs(dir_to_make)
+	###########################################################################
 	# SANITY CHECKS
 	###########################################################################
 
-	assert (args.do_train or args.do_eval), "Either do_train and/or do_eval must be chosen"
+	# assert (args.do_train or args.do_eval or a), "Either do_train and/or do_eval must be chosen"
 	assert args.model_name.lower() in ['han', 'hgrulwan', 'hcapsnet',
 									   'hcapsnetmultiheadatt'], "The model (--model_name) can be chosen from: HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt."
 	assert args.word_encoder.lower() in ['gru', 'transformer',
@@ -232,7 +241,7 @@ def main(use_prog_bar=True):
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
 													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
-													  keep_ulmfit_frozen= args.keep_frozen)
+													  keep_ulmfit_frozen= args.keep_frozen, class_report_dir=args.class_report_dir)
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,
@@ -241,7 +250,7 @@ def main(use_prog_bar=True):
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
 									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps,
-									  binary_class=args.binary_class, dropout_caps=args.dropout_caps)
+									  binary_class=args.binary_class, dropout_caps=args.dropout_caps, KDE_epsilon = args.KDE_epsilon)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

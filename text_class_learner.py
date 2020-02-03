@@ -77,7 +77,8 @@ class MultiLabelTextClassifier:
 
 	def __init__(self, model_name, word_to_idx, label_to_idx, label_map, min_freq_word = 100,
 				 tensorboard_dir = 'runs', B_train = 16, B_eval = 32, weight_decay = 1e-4, lr = 1e-3,
-				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False, **kwargs):
+				 dropout = 0.1, K=5, verbose=True, gradual_unfeeze=True, keep_ulmfit_frozen=False,
+				 class_report_dir = 'class_reports', **kwargs):
 
 		self.model_name = model_name
 		self.use_doc_encoding = 'caps' in model_name.lower()
@@ -101,6 +102,7 @@ class MultiLabelTextClassifier:
 		self.verbose = verbose
 		self.gradual_unfreeze = gradual_unfeeze
 		self.keep_ulmfit_frozen = keep_ulmfit_frozen
+		self.class_report_dir = class_report_dir
 
 		# Placeholders for attributes to be initialized
 		# TODO: use kwarg arguments downstream  --> or just keep for load method?
@@ -169,7 +171,7 @@ class MultiLabelTextClassifier:
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
-				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True):
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True, KDE_epsilon = 0.05):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -194,13 +196,13 @@ class MultiLabelTextClassifier:
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps,
 								  	ulmfit_pretrained_path=ulmfit_pretrained_path, dropout_factor_ulmfit=dropout_factor_ulmfit,
-								  	lambda_reg_caps = lambda_reg_caps, binary_class = binary_class)
+								  	lambda_reg_caps = lambda_reg_caps, binary_class = binary_class, KDE_epsilon=KDE_epsilon)
 		elif self.model_name.lower() == 'hcapsnetmultiheadatt':
 			self.model = HCapsNetMultiHeadAtt(self.vocab_size, embed_dim, word_hidden, sent_hidden, self.num_labels, dropout=dropout,
 							 		word_encoder = word_encoder, sent_encoder = sent_encoder, dropout_caps = dropout_caps,
 									dim_caps=dim_caps, num_caps=num_caps, num_compressed_caps=num_compressed_caps, nhead_doc=nhead_doc,
 									ulmfit_pretrained_path=ulmfit_pretrained_path,dropout_factor_ulmfit=dropout_factor_ulmfit,
-									lambda_reg_caps = lambda_reg_caps, binary_class = binary_class)
+									lambda_reg_caps = lambda_reg_caps, binary_class = binary_class, KDE_epsilon=KDE_epsilon)
 
 		if binary_class:
 			# Initialize training attributes
@@ -397,14 +399,14 @@ class MultiLabelTextClassifier:
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
 		# Eval dev
 
-		write_path = os.path.join('class_reports', '{}'.format(train_step))
+		write_path = os.path.join(self.class_report_dir, '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
 			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
 
 		# Eval Train
 		r_k_tr, p_k_tr, rp_k_tr, ndcg_k_tr, avg_loss_tr,  hamming_tr, \
-			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K)
-																	# max_samples=len(dataloader_dev))
+			emr_tr, f1_micro_tr, f1_macro_tr = self.eval_dataset(dataloader_train, K=self.K,
+																	max_samples=len(dataloader_dev))
 
 		# Save model if best
 		if best_score <= f1_micro_dev:

@@ -9,7 +9,7 @@ import configparser
 import gc
 from collections import OrderedDict
 from main import main as train_eval
-from imblearn.over_sampling import RandomOverSampler
+import sys
 
 def write_interm_results(params, loss):
 	global log_path
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 	data_path = args.data_path
 	label_to_idx_path = args.label_to_idx_path
 
-
+	sys.argv = [sys.argv[0]]  # to untangle command lind arguments of hyper_opt and main
 
 	###########################################
 	# define search space
@@ -196,11 +196,11 @@ if __name__ == '__main__':
 		trials = Trials()
 
 	# perform optimization
-	try: # to be sure that trials object will be saved
-		best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
-	except:
-		with open(out_trials_path, 'wb') as f:
-			pickle.dump(trials, f)
+	# try: # to be sure that trials object will be saved
+	best = fmin(objective, space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
+	# except:
+	# 	with open(out_trials_path, 'wb') as f:
+	# 		pickle.dump(trials, f)
 	# Store trials
 
 	with open(out_trials_path, 'wb') as f:

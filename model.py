@@ -212,7 +212,7 @@ class HCapsNet(nn.Module):
                                                 bidirectional=bidirectional,
                                                 num_layers=num_layers_sen, nhead=nhead_sen)
 
-        self.caps_classifier = CapsNet_Text(sent_out, 1, num_classes, dim_caps=dim_caps, num_caps=num_caps,
+        self.caps_classifier = CapsNet_Text(1, sent_out, num_classes, dim_caps=dim_caps, num_caps=num_caps,
                                             num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
                                             lambda_reg_caps = lambda_reg_caps, KDE_epsilon=KDE_epsilon)
 
@@ -250,7 +250,7 @@ class HCapsNet(nn.Module):
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
         # Apply capsule
-        doc_encoding = doc_encoding.unsqueeze(1)
+        doc_encoding = doc_encoding.unsqueeze(2)
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
@@ -267,8 +267,8 @@ class HCapsNet(nn.Module):
 
 class HCapsNetMultiHeadAtt(nn.Module):
     def __init__(self, num_tokens, embed_size, word_hidden, sent_hidden, num_classes, bidirectional=True, dropout=0.1, word_encoder='GRU', sent_encoder='GRU',
-                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, nhead_doc = 25,
-                 dropout_caps=0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit=1.0, **kwargs):
+                 num_layers_word = 1, num_layers_sen = 1, nhead_word = 4, nhead_sen = 4, dim_caps=16, num_caps = 25, num_compressed_caps = 100, nhead_doc = 5,
+                 dropout_caps=0.2, lambda_reg_caps = 0.0005, ulmfit_pretrained_path=None, dropout_factor_ulmfit=1.0, KDE_epsilon = 0.05, **kwargs):
         super(HCapsNetMultiHeadAtt, self).__init__()
 
         # self.batch_size = batch_size
@@ -295,9 +295,9 @@ class HCapsNetMultiHeadAtt(nn.Module):
         self.doc_encoder = GRUMultiHeadAtt(sent_hidden, word_out, nhead_doc=nhead_doc,
                                            bidirectional=bidirectional, dropout=dropout, aggregate_output=False)
 
-        self.caps_classifier = CapsNet_Text(sent_out, nhead_doc, num_classes,dim_caps=dim_caps, num_caps=num_caps
+        self.caps_classifier = CapsNet_Text(nhead_doc, sent_out, num_classes,dim_caps=dim_caps, num_caps=num_caps
                                             , num_compressed_caps=num_compressed_caps, dropout_caps = dropout_caps,
-                                            lambda_reg_caps = lambda_reg_caps)
+                                            lambda_reg_caps = lambda_reg_caps, KDE_epsilon=KDE_epsilon)
         # self.out = nn.Linear(sent_out, num_classes)
         self.bn = nn.BatchNorm1d(sent_out)
         self.drop = nn.Dropout(dropout)
@@ -324,7 +324,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
         return params
 
 
-    def forward(self, sents, encoding):
+    def forward(self, sents, encoding=None):
 
         # for support of multi-gpu
         n_doc, n_sents, sen_len = sents.size()
@@ -338,15 +338,18 @@ class HCapsNetMultiHeadAtt(nn.Module):
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
-        doc_encoding = self.drop(self.bn(doc_encoding.permute(0,2,1))).permute(0,2,1)
+        # doc_encoding = self.drop(self.bn(doc_encoding.permute(0,2,1))).permute(0,2,1)
         # doc_encoding = self.drop(self.bn(doc_encoding))
 
-        poses, activations = self.caps_classifier(doc_encoding)
+        poses, activations = self.caps_classifier(doc_encoding.permute(0,2,1))
         activations = activations.squeeze(2)
 
-        rec_loss = self.caps_classifier.reconstruction_loss(encoding, poses)
+        if encoding is None:
+            return activations, word_attn_weight, sent_attn_weight, 0
+        # Compute reconstruction loss
+        rec_los = self.caps_classifier.reconstruction_loss(encoding, poses)
 
-        return activations, word_attn_weight, sent_attn_weight, rec_loss
+        return activations, word_attn_weight, sent_attn_weight, rec_los
 
 
 class MyDataParallel(nn.DataParallel):

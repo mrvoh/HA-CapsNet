@@ -494,7 +494,9 @@ class PrimaryCaps(nn.Module):
 
 	def forward(self, x):
 		batch_size = x.size(0)
+
 		u = self.capsules(x)
+
 		u = u.view(batch_size, self.num_capsules, self.out_channels, -1, 1)
 		poses = squash_v1(u, axis=1)
 		activations = torch.sqrt((poses ** 2).sum(1))
