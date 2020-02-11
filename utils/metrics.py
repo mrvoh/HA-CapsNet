@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.metrics import accuracy_score, f1_score, hamming_loss, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, f1_score, hamming_loss, precision_recall_fscore_support, matthews_corrcoef
 from sklearn.utils.multiclass import type_of_target
 import os
 
@@ -86,6 +86,10 @@ def accuracy(y_true, y_pred, convert_logits, binary_class):
 	emr = accuracy_score(y_true, y_pred, normalize=True)
 	f1_micro = f1_score(y_true, y_pred, average='micro')
 	f1_macro = f1_score(y_true, y_pred, average='macro')
+
+	# if binary_class:
+	# 	mcc = matthews_corrcoef(y_true, y_pred)
+	# 	return hamming, emr, f1_micro, f1_macro, mcc
 
 	return hamming, emr, f1_micro, f1_macro
 

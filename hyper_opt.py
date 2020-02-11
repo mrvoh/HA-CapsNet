@@ -48,10 +48,6 @@ def set_params(params, config_path):
 		config.write(f)
 
 
-
-
-
-
 def objective(params):
 	# return {'loss': 1, 'status': STATUS_OK}
 	# objective fn to be minimized

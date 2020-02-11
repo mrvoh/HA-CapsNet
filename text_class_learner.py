@@ -1,18 +1,16 @@
-import os
 # from torchnlp.word_to_vector import FastText
 import torch
-from torch import nn
+import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-from torchnlp.encoders.text import stack_and_pad_tensors
 
 from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt, MyDataParallel
 from data_utils.data_utils import get_embedding, doc_to_sample, collate_fn_rnn, collate_fn_transformer
-from utils.radam import RAdam
+from optimizers.radam import get_cosine_with_hard_restarts_schedule_with_warmup
+from optimizers.adamw import AdamW
 from utils.logger import get_logger, Progbar
 from utils.metrics import *
 from document_model import Document, TextPreprocessor
 from losses.focal_loss import FocalLoss
-from losses.categorical_cross_entropy import CategoricalCrossEntropyWithSoftmax
 
 try:
 	import fasttext
@@ -116,7 +114,8 @@ class MultiLabelTextClassifier:
 		self.ulmfit_pretrained_path = kwargs.get('ulmfit_pretrained_path', None)
 		self.binary_class = kwargs.get('binary_class', True)
 		self.criterion = kwargs.get('criterion', None)
-
+		self.num_epochs = kwargs.get('num_epochs', None)
+		self.steps_per_epoch = kwargs.get('steps_per_epoch', None)
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
 		self.num_labels = len(label_to_idx)
@@ -227,7 +226,8 @@ class MultiLabelTextClassifier:
 		# Load embeddings
 		if word_encoder.lower() != 'ulmfit':
 			# initialize optimizer
-			self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+			# self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+			params = self.model.parameters()
 			# get word embeddings
 			vectors = fasttext.load_model(vector_path)
 
@@ -237,7 +237,7 @@ class MultiLabelTextClassifier:
 			# intialize per-layer lr for ULMFiT
 			eta = 2.6 # from ULMFiT paper
 			num_layers = 4
-			lr_div_factor = 15
+			lr_div_factor = 8
 
 			params = [
 				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/lr_div_factor},
@@ -252,7 +252,13 @@ class MultiLabelTextClassifier:
 			# params.extend([
 			# 	{"params": self.model.sent_encoder.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
 			# ])
-			self.optimizer = RAdam(params, lr = self.lr,  weight_decay=self.weight_decay)
+			# self.optimizer = RAdam(params, lr = self.lr,  weight_decay=self.weight_decay)
+		self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
+
+		self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(self.optimizer,
+								num_warmup_steps=self.steps_per_epoch, num_training_steps=self.steps_per_epoch*self.num_epochs, num_cycles = self.num_epochs/5)
+		# self.scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optimizer, T_max=self.num_epochs,
+		# 													  eta_min=self.lr / 10)
 
 		if self.keep_ulmfit_frozen: # Freeze ulmfit completely
 			self.model.sent_encoder.word_encoder.freeze_to(-1)
@@ -362,6 +368,7 @@ class MultiLabelTextClassifier:
 		tr_loss = 0
 
 		for batch_idx, batch in enumerate(dataloader_train):
+			self.scheduler.step()
 			train_step += 1
 			optimizer.zero_grad()
 
@@ -416,7 +423,7 @@ class MultiLabelTextClassifier:
 			self.save(os.path.join(self.save_dir, self.model_name + '.pt'))
 			# torch.save(self.model.state_dict(),
 			# 		   os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev, self.K, rp_k_dev)))
-			self.logger.info("Saved model with new best score: {0:.3f}".format(rp_k_dev))
+			self.logger.info("Saved model with new best score: {0:.3f}".format(best_score))
 		# elif best_loss > avg_loss_dev:
 		# 	best_loss = avg_loss_dev
 		#
@@ -481,12 +488,14 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False, self.binary_class) #TODO: remove hard-coded stuff
+		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False, self.binary_class)
 
 		if write_path is not None:
 			write_classification_report(write_path, y_pred, y_true, self.label_to_idx, False, self.binary_class) #TODO: remove hard-coded stuff
 
-		self.logger.info("Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
+		log_results = "Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro)
+
+		self.logger.info(log_results)
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		# for i in range(1, K + 1):

@@ -59,7 +59,14 @@ def main(use_prog_bar=True):
 		if 'dir' in arg:
 			dir_to_make = getattr(args, arg)
 			if not os.path.exists(dir_to_make):
-				print(dir_to_make)
+				os.makedirs(dir_to_make)
+		if 'path' in arg:
+			p = getattr(args, arg)
+			if p in [None, '']: # skip invalid paths
+				continue
+			dir_to_make = os.path.dirname(getattr(args, arg))
+
+			if not os.path.exists(dir_to_make) and dir_to_make != '':
 				os.makedirs(dir_to_make)
 	###########################################################################
 	# SANITY CHECKS
@@ -241,7 +248,8 @@ def main(use_prog_bar=True):
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
 													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
-													  keep_ulmfit_frozen= args.keep_frozen, class_report_dir=args.class_report_dir)
+													  keep_ulmfit_frozen= args.keep_frozen, class_report_dir=args.class_report_dir,
+													  num_epochs = args.num_train_epochs, steps_per_epoch = len(dataloader_train))
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,
