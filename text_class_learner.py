@@ -156,6 +156,7 @@ class MultiLabelTextClassifier:
 		elif params['model_name'].lower() == 'hcapsnetmultiheadatt':
 			model = HCapsNetMultiHeadAtt(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
+		params['state_dict'] = {k.replace('module.', ''):v for k,v in params['state_dict'].items()}
 		model.load_state_dict(params['state_dict'])
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -472,10 +473,7 @@ class MultiLabelTextClassifier:
 				if not self.binary_class:
 					target = target.squeeze(1)
 
-				if self.use_doc_encoding:  # Capsule based models
-					preds = self.model(sents, doc_encoding)[0]
-				else:
-					preds = self.model(sents)[0]
+				preds = self.model(sents)[0]
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets

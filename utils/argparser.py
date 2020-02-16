@@ -153,7 +153,7 @@ def get_parser():
 						action='store_true',
 						help="Whether to oversample minority classes to balance the dataset. Note: only for parsing from sheets (csv/xlsx).")
 	parser.add_argument("--dataset_name",
-						default='imdb',
+						default='imdb-full',
 						type=str,
 						required=False,
 						help="Name of the dataset.")

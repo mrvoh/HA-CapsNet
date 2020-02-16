@@ -132,7 +132,8 @@ def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_f
 	# convert to tensors
 	if binary_class:
 		sample['tags'] = np.zeros(n_labels)
-		sample['tags'][tags] = label_value
+		sample['tags'][tags] = 1.0
+		sample['tags'] = sample['tags'] * label_value + label_value/n_labels
 
 		sample['tags'] = torch.FloatTensor(sample['tags']) #One Hot Encoded target
 	else:

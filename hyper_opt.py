@@ -51,10 +51,10 @@ def set_params(params, config_path):
 def objective(params):
 	# return {'loss': 1, 'status': STATUS_OK}
 	# objective fn to be minimized
-	global data_path, label_to_idx_path, K, config_path, trials
+	global train_path, test_path, label_to_idx_path, K, config_path, trials
 
 	# get stratisfied split
-	df = docs_to_sheet(data_path, 'tmp.csv', label_to_idx_path)
+	df = docs_to_sheet(train_path, 'tmp.csv', label_to_idx_path)
 	df.drop(columns=['text'], inplace=True)
 	df.reset_index(inplace=True)
 
@@ -66,7 +66,7 @@ def objective(params):
 	k_fold = IterativeStratification(n_splits=K, order=1)
 
 	# get docs
-	with open(data_path, 'rb') as f:
+	with open(train_path, 'rb') as f:
 		docs = pickle.load(f)
 
 	scores = []
@@ -74,7 +74,7 @@ def objective(params):
 	tmp_dev_path = 'temp_dev.pkl'
 	params['train_path'] = tmp_tr_path
 	params['dev_path'] = tmp_dev_path
-	params['test_path'] = tmp_dev_path
+	params['test_path'] = test_path
 	set_params(params, config_path)
 
 	for train_idx, dev_idx in k_fold.split(X,y):
@@ -136,8 +136,13 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="Path from where to read the config for training.")
-	parser.add_argument("--data_path",
+	parser.add_argument("--train_path",
 						default=os.path.join('dataset','reuters','train.pkl'),
+						type=str,
+						required=False,
+						help="The path where to dump logging.")
+	parser.add_argument("--test_path",
+						default=os.path.join('dataset','reuters','dev.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
@@ -161,7 +166,8 @@ if __name__ == '__main__':
 	config_path = args.config_path
 
 	# data settings
-	data_path = args.data_path
+	train_path = args.train_path
+	test_path = args.test_path
 	label_to_idx_path = args.label_to_idx_path
 
 	sys.argv = [sys.argv[0]]  # to untangle command lind arguments of hyper_opt and main
@@ -170,7 +176,7 @@ if __name__ == '__main__':
 	# define search space
 	space = {
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
-		'weight_decay':hp.loguniform('weight_decay', np.log(1e-5), np.log(0.1)),
+		# 'weight_decay':hp.loguniform('weight_decay', np.log(0), np.log(0.1)),
 		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.6),
 		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-2)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),

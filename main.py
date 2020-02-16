@@ -138,7 +138,7 @@ def main(use_prog_bar=True):
 						balance_dataset=args.balance_dataset)
 		else:
 			raise AssertionError(
-				'Currently only Reuters, sheets and EUR-Lex57k are supported datasets for preprocessing.')
+				'Currently only Reuters, TREC, IMDB, EUR-Lex57k and custom sheets are supported datasets for preprocessing.')
 
 	if args.create_doc_encodings:
 		#TODO: more efficient?
@@ -227,7 +227,7 @@ def main(use_prog_bar=True):
 																	label_to_idx=label_to_idx, min_freq_word=None,
 																	unk=unk, pad=pad, label_value = args.label_value,
 																	binary_class=args.binary_class)
-		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, False, use_rnn)
+		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, True, use_rnn)
 		# Free some memory
 		del dev_dataset
 		del dev_docs
