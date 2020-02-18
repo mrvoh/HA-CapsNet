@@ -332,16 +332,14 @@ class HCapsNetMultiHeadAtt(nn.Module):
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
 
-        sen_encodings = sen_encodings.split(split_size=[n_sents]*n_doc)
-        # stack and pad
-        sen_encodings, _ = stack_and_pad_tensors(sen_encodings)  #
+        sen_encodings = sen_encodings.view(n_doc, n_sents, -1)#
         # get predictions
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
 
         # doc_encoding = self.drop(self.bn(doc_encoding.permute(0,2,1))).permute(0,2,1)
         # doc_encoding = self.drop(self.bn(doc_encoding))
-
-        poses, activations = self.caps_classifier(doc_encoding.permute(0,2,1))
+        doc_encoding = doc_encoding.permute(0,2,1)
+        poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
         if encoding is None:

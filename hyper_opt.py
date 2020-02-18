@@ -184,7 +184,7 @@ if __name__ == '__main__':
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
 		'sent_hidden':hp.uniform('sent_hidden', 25, 200),
 		'min_freq_word':hp.quniform('min_freq_word', 1, 50,1),
-		'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
+		# 'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
 	}
 
 	# Create Trials object to log the performance
