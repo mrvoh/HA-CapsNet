@@ -37,6 +37,10 @@ def get_parser():
 						required=True,
 						type=float,
 						help="The initial learning rate for Adam.")
+	parser.add_argument("--num_cycles_lr",
+						required=True,
+						type=int,
+						help="The number of warm restarts done for learning rate schedule.")
 	parser.add_argument("--dropout",
 						required=True,
 						type=float,
@@ -96,6 +100,9 @@ def get_parser():
 	parser.add_argument("--dropout_factor",
 						type=float,
 						help="Multiplier for standard dropout values in ULMFiT.")
+	parser.add_argument("--lr_div_factor",
+						type=float,
+						help="Factor to divide learning rate with for training ulmfit.")
 	parser.add_argument("--gradual_unfreeze",
 						action='store_true',
 						help="Unfreeze ULMFiT one layer per epoch.")

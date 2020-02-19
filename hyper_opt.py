@@ -177,13 +177,15 @@ if __name__ == '__main__':
 	space = {
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
 		# 'weight_decay':hp.loguniform('weight_decay', np.log(0), np.log(0.1)),
-		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.6),
+		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.4),
 		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-2)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
-		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
+		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 5),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
-		'sent_hidden':hp.uniform('sent_hidden', 25, 200),
+		'sent_hidden':hp.quniform('sent_hidden', 20, 400, 10),
 		'min_freq_word':hp.quniform('min_freq_word', 1, 50,1),
+		'num_cycles_lr':hp.quniform('num_cycles_lr',1,10,1),
+		'lr_div_factor':hp.uniform('lr_div_factor',1,20)
 		# 'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
 	}
 
