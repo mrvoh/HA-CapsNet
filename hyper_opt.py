@@ -33,7 +33,7 @@ def write_interm_results(params, loss):
 
 def set_params(params, config_path):
 
-	for param in ['num_compressed_caps', 'min_freq_word', 'sent_hidden']:
+	for param in ['num_compressed_caps', 'min_freq_word', 'sent_hidden', 'num_cycles_lr']:
 		params[param] = int(params[param])
 	# reads in config file and overwrites params for optimization
 	config = configparser.ConfigParser()
@@ -48,17 +48,13 @@ def set_params(params, config_path):
 		config.write(f)
 
 
-
-
-
-
 def objective(params):
 	# return {'loss': 1, 'status': STATUS_OK}
 	# objective fn to be minimized
-	global data_path, label_to_idx_path, K, config_path, trials
+	global train_path, test_path, label_to_idx_path, K, config_path, trials
 
 	# get stratisfied split
-	df = docs_to_sheet(data_path, 'tmp.csv', label_to_idx_path)
+	df = docs_to_sheet(train_path, 'tmp.csv', label_to_idx_path)
 	df.drop(columns=['text'], inplace=True)
 	df.reset_index(inplace=True)
 
@@ -70,7 +66,7 @@ def objective(params):
 	k_fold = IterativeStratification(n_splits=K, order=1)
 
 	# get docs
-	with open(data_path, 'rb') as f:
+	with open(train_path, 'rb') as f:
 		docs = pickle.load(f)
 
 	scores = []
@@ -78,7 +74,7 @@ def objective(params):
 	tmp_dev_path = 'temp_dev.pkl'
 	params['train_path'] = tmp_tr_path
 	params['dev_path'] = tmp_dev_path
-	params['test_path'] = tmp_dev_path
+	params['test_path'] = test_path
 	set_params(params, config_path)
 
 	for train_idx, dev_idx in k_fold.split(X,y):
@@ -140,8 +136,13 @@ if __name__ == '__main__':
 						type=str,
 						required=False,
 						help="Path from where to read the config for training.")
-	parser.add_argument("--data_path",
+	parser.add_argument("--train_path",
 						default=os.path.join('dataset','reuters','train.pkl'),
+						type=str,
+						required=False,
+						help="The path where to dump logging.")
+	parser.add_argument("--test_path",
+						default=os.path.join('dataset','reuters','dev.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
@@ -165,7 +166,8 @@ if __name__ == '__main__':
 	config_path = args.config_path
 
 	# data settings
-	data_path = args.data_path
+	train_path = args.train_path
+	test_path = args.test_path
 	label_to_idx_path = args.label_to_idx_path
 
 	sys.argv = [sys.argv[0]]  # to untangle command lind arguments of hyper_opt and main
@@ -174,15 +176,17 @@ if __name__ == '__main__':
 	# define search space
 	space = {
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
-		'weight_decay':hp.loguniform('weight_decay', np.log(1e-5), np.log(0.1)),
-		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.6),
-		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-2)),
+		# 'weight_decay':hp.loguniform('weight_decay', np.log(0), np.log(0.1)),
+		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.4),
+		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-3)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
-		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 1),
+		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 5),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
-		'sent_hidden':hp.uniform('sent_hidden', 25, 200),
+		'sent_hidden':hp.quniform('sent_hidden', 20, 400, 10),
 		'min_freq_word':hp.quniform('min_freq_word', 1, 50,1),
-		'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
+		'num_cycles_lr':hp.quniform('num_cycles_lr',1,10,1),
+		'lr_div_factor':hp.uniform('lr_div_factor',1,20)
+		# 'KDE_epsilon':hp.uniform('KDE_epsilon', 0.01, 0.1)
 	}
 
 	# Create Trials object to log the performance

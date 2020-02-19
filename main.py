@@ -1,9 +1,3 @@
-""""
-TODO: Data pre-processing
-	Own word vecs
-	LASER sentences embeddings
-	Embed label descriptions?
-"""
 import os
 import pickle
 import json
@@ -59,7 +53,14 @@ def main(use_prog_bar=True):
 		if 'dir' in arg:
 			dir_to_make = getattr(args, arg)
 			if not os.path.exists(dir_to_make):
-				print(dir_to_make)
+				os.makedirs(dir_to_make)
+		if 'path' in arg:
+			p = getattr(args, arg)
+			if p in [None, '']: # skip invalid paths
+				continue
+			dir_to_make = os.path.dirname(getattr(args, arg))
+
+			if not os.path.exists(dir_to_make) and dir_to_make != '':
 				os.makedirs(dir_to_make)
 	###########################################################################
 	# SANITY CHECKS
@@ -131,7 +132,7 @@ def main(use_prog_bar=True):
 						balance_dataset=args.balance_dataset)
 		else:
 			raise AssertionError(
-				'Currently only Reuters, sheets and EUR-Lex57k are supported datasets for preprocessing.')
+				'Currently only Reuters, TREC, IMDB, EUR-Lex57k and custom sheets are supported datasets for preprocessing.')
 
 	if args.create_doc_encodings:
 		#TODO: more efficient?
@@ -220,7 +221,7 @@ def main(use_prog_bar=True):
 																	label_to_idx=label_to_idx, min_freq_word=None,
 																	unk=unk, pad=pad, label_value = args.label_value,
 																	binary_class=args.binary_class)
-		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, False, use_rnn)
+		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, True, use_rnn)
 		# Free some memory
 		del dev_dataset
 		del dev_docs
@@ -241,7 +242,8 @@ def main(use_prog_bar=True):
 													  B_train=args.train_batch_size, word_encoder=args.word_encoder,
 													  B_eval=args.eval_batch_size, weight_decay=args.weight_decay,
 													  lr=args.learning_rate, gradual_unfeeze=args.gradual_unfreeze,
-													  keep_ulmfit_frozen= args.keep_frozen, class_report_dir=args.class_report_dir)
+													  keep_ulmfit_frozen= args.keep_frozen, class_report_dir=args.class_report_dir,
+													  num_epochs = args.num_train_epochs, steps_per_epoch = len(dataloader_train))
 
 			TextClassifier.init_model(args.embed_dim, args.word_hidden, args.sent_hidden, args.dropout,
 									  args.word_vec_path, pos_weight=pos_weight,
@@ -250,7 +252,8 @@ def main(use_prog_bar=True):
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
 									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps,
-									  binary_class=args.binary_class, dropout_caps=args.dropout_caps, KDE_epsilon = args.KDE_epsilon)
+									  binary_class=args.binary_class, dropout_caps=args.dropout_caps, KDE_epsilon = args.KDE_epsilon,
+									  num_cycles_lr=args.num_cycles_lr, lr_div_factor=args.lr_div_factor)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,

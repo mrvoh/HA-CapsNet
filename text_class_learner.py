@@ -1,18 +1,16 @@
-import os
 # from torchnlp.word_to_vector import FastText
 import torch
-from torch import nn
+import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
-from torchnlp.encoders.text import stack_and_pad_tensors
 
 from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt, MyDataParallel
 from data_utils.data_utils import get_embedding, doc_to_sample, collate_fn_rnn, collate_fn_transformer
-from utils.radam import RAdam
+from optimizers.radam import get_cosine_with_hard_restarts_schedule_with_warmup, RAdam
+from optimizers.adamw import AdamW
 from utils.logger import get_logger, Progbar
 from utils.metrics import *
 from document_model import Document, TextPreprocessor
 from losses.focal_loss import FocalLoss
-from losses.categorical_cross_entropy import CategoricalCrossEntropyWithSoftmax
 
 try:
 	import fasttext
@@ -116,6 +114,10 @@ class MultiLabelTextClassifier:
 		self.ulmfit_pretrained_path = kwargs.get('ulmfit_pretrained_path', None)
 		self.binary_class = kwargs.get('binary_class', True)
 		self.criterion = kwargs.get('criterion', None)
+		self.num_epochs = kwargs.get('num_epochs', None)
+		self.steps_per_epoch = kwargs.get('steps_per_epoch', None)
+		self.num_cycles_lr = kwargs.get('num_cycles_lr', None)
+		self.lr_div_factor = kwargs.get('lr_div_factor', None)
 
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
@@ -157,6 +159,8 @@ class MultiLabelTextClassifier:
 		elif params['model_name'].lower() == 'hcapsnetmultiheadatt':
 			model = HCapsNetMultiHeadAtt(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
+		# Strip prefixes created by DataParallel
+		params['state_dict'] = {k.replace('module.', '', 1) if k.startswith('module.') else k:v for k,v in params['state_dict'].items()}
 		model.load_state_dict(params['state_dict'])
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -171,7 +175,7 @@ class MultiLabelTextClassifier:
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
-				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True, KDE_epsilon = 0.05):
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True, KDE_epsilon = 0.05, num_cycles_lr = 5, lr_div_factor = 10):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -181,6 +185,8 @@ class MultiLabelTextClassifier:
 		self.sent_encoder = sent_encoder
 		self.ulmfit_pretrained_path = ulmfit_pretrained_path
 		self.binary_class = binary_class
+		self.num_cycles_lr = num_cycles_lr
+		self.lr_div_factor = lr_div_factor
 
 		# Initialize model and load pretrained weights if given
 		self.logger.info("Building model...")
@@ -207,7 +213,7 @@ class MultiLabelTextClassifier:
 		if binary_class:
 			# Initialize training attributes
 			if 'caps' in self.model_name.lower():
-				self.criterion = FocalLoss() #TODO: test and propagate
+				self.criterion = FocalLoss()
 				# self.criterion = torch.nn.BCELoss()
 			else:
 				if pos_weight:
@@ -216,8 +222,6 @@ class MultiLabelTextClassifier:
 		else:
 			if 'caps' in self.model_name.lower():
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-				# self.criterion = CategoricalCrossEntropyWithSoftmax()
-				# self.criterion = torch.nn.NLLLoss()
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
@@ -227,7 +231,7 @@ class MultiLabelTextClassifier:
 		# Load embeddings
 		if word_encoder.lower() != 'ulmfit':
 			# initialize optimizer
-			self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+			params = self.model.parameters()
 			# get word embeddings
 			vectors = fasttext.load_model(vector_path)
 
@@ -235,24 +239,20 @@ class MultiLabelTextClassifier:
 			self.model.set_embedding(embed_table)
 		else:
 			# intialize per-layer lr for ULMFiT
-			eta = 2.6 # from ULMFiT paper
-			num_layers = 4
-			lr_div_factor = 15
-
 			params = [
-				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/lr_div_factor},
+				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/self.lr_div_factor},
 				{'params':self.model.caps_classifier.parameters()},
 				{'params':self.model.doc_encoder.parameters()},
 				{'params':self.model.sent_encoder.weight_W_word.parameters()},
 				{'params':self.model.sent_encoder.weight_proj_word}
 			]
 
-			# ulmfit_params = list(self.model.sent_encoder.word_encoder.parameters())
-			# params = [{"params":[p for p in self.model.parameters() if not any([p.equal(up) for up in ulmfit_params])]}]
-			# params.extend([
-			# 	{"params": self.model.sent_encoder.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
-			# ])
-			self.optimizer = RAdam(params, lr = self.lr,  weight_decay=self.weight_decay)
+
+		# self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
+		self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
+
+		self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(self.optimizer,
+								num_warmup_steps=self.steps_per_epoch, num_training_steps=self.steps_per_epoch*self.num_epochs, num_cycles = self.num_cycles_lr)
 
 		if self.keep_ulmfit_frozen: # Freeze ulmfit completely
 			self.model.sent_encoder.word_encoder.freeze_to(-1)
@@ -298,8 +298,6 @@ class MultiLabelTextClassifier:
 		with torch.no_grad():
 			(sents_batch, tags_batch, encoding_batch) = \
 				collate_fn_rnn([sample]) if self.word_encoder.lower() == 'gru' else collate_fn_transformer([sample])
-			# if self.word_encoder.lower() == 'gru':
-			# 	batch = colla
 
 			preds, word_attention_scores, sent_attention_scores, _ = self.model(sents_batch)
 
@@ -319,7 +317,6 @@ class MultiLabelTextClassifier:
 		else:
 			word_attention_scores = [word_attention_scores]
 
-		# word_attention_scores = [[s*100 for s in sen] for sen in word_attention_scores]
 		return preds, word_attention_scores, sent_attention_scores
 
 	def predict_text(self, text, return_doc=False):
@@ -362,6 +359,8 @@ class MultiLabelTextClassifier:
 		tr_loss = 0
 
 		for batch_idx, batch in enumerate(dataloader_train):
+			torch.cuda.empty_cache()
+			self.scheduler.step()
 			train_step += 1
 			optimizer.zero_grad()
 
@@ -385,7 +384,7 @@ class MultiLabelTextClassifier:
 			else:
 				loss.backward()
 
-			# torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+			torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
 			optimizer.step()
 			if use_prog_bar: prog.update(batch_idx + 1, values=[("train loss", loss.item()), ("recon loss", rec_loss)])
 			torch.cuda.empty_cache()
@@ -395,10 +394,9 @@ class MultiLabelTextClassifier:
 
 		return best_score, best_loss, train_step
 
-
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
-		# Eval dev
 
+		# Eval dev
 		write_path = os.path.join(self.class_report_dir, '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
 			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
@@ -414,9 +412,7 @@ class MultiLabelTextClassifier:
 
 			# self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
 			self.save(os.path.join(self.save_dir, self.model_name + '.pt'))
-			# torch.save(self.model.state_dict(),
-			# 		   os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev, self.K, rp_k_dev)))
-			self.logger.info("Saved model with new best score: {0:.3f}".format(rp_k_dev))
+			self.logger.info("Saved model with new best score: {0:.3f}".format(best_score))
 		# elif best_loss > avg_loss_dev:
 		# 	best_loss = avg_loss_dev
 		#
@@ -465,10 +461,11 @@ class MultiLabelTextClassifier:
 				if not self.binary_class:
 					target = target.squeeze(1)
 
-				if self.use_doc_encoding:  # Capsule based models
-					preds = self.model(sents, doc_encoding)[0]
-				else:
+				if doc_encoding is None:
 					preds = self.model(sents)[0]
+				else:
+					preds = self.model(sents, doc_encoding)[0]
+
 				loss = self.criterion(preds, target)
 				eval_loss += loss.item()
 				# store predictions and targets
@@ -481,12 +478,14 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False, self.binary_class) #TODO: remove hard-coded stuff
+		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False, self.binary_class)
 
 		if write_path is not None:
 			write_classification_report(write_path, y_pred, y_true, self.label_to_idx, False, self.binary_class) #TODO: remove hard-coded stuff
 
-		self.logger.info("Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro))
+		log_results = "Hamming score {:1.3f} | Exact Match Ratio {:1.3f} | Micro F1 {:1.3f} | Macro F1 {:1.3f}".format(hamming, emr, f1_micro, f1_macro)
+
+		self.logger.info(log_results)
 		template = 'F1@{0} : {1:1.3f} R@{0} : {2:1.3f}   P@{0} : {3:1.3f}   RP@{0} : {4:1.3f}   NDCG@{0} : {5:1.3f}'
 
 		# for i in range(1, K + 1):
