@@ -116,6 +116,9 @@ class MultiLabelTextClassifier:
 		self.criterion = kwargs.get('criterion', None)
 		self.num_epochs = kwargs.get('num_epochs', None)
 		self.steps_per_epoch = kwargs.get('steps_per_epoch', None)
+		self.num_cycles_lr = kwargs.get('num_cycles_lr', None)
+		self.lr_div_factor = kwargs.get('lr_div_factor', None)
+
 		# Other attributes
 		self.vocab_size = len(word_to_idx)
 		self.num_labels = len(label_to_idx)
@@ -210,8 +213,8 @@ class MultiLabelTextClassifier:
 		if binary_class:
 			# Initialize training attributes
 			if 'caps' in self.model_name.lower():
-				self.criterion = FocalLoss() #TODO: test and propagate
-				# self.criterion = torch.nn.BCELoss()
+				# self.criterion = FocalLoss() #TODO: test and propagate
+				self.criterion = torch.nn.BCELoss()
 			else:
 				if pos_weight:
 					pos_weight = torch.tensor(pos_weight).to(self.device)

@@ -252,7 +252,8 @@ def main(use_prog_bar=True):
 									  num_compressed_caps=args.num_compressed_caps, nhead_doc=args.num_head_doc,
 									  ulmfit_pretrained_path=args.ulmfit_pretrained_path,
 									  dropout_factor_ulmfit=args.dropout_factor, lambda_reg_caps=args.lambda_reg_caps,
-									  binary_class=args.binary_class, dropout_caps=args.dropout_caps, KDE_epsilon = args.KDE_epsilon)
+									  binary_class=args.binary_class, dropout_caps=args.dropout_caps, KDE_epsilon = args.KDE_epsilon,
+									  num_cycles_lr=args.num_cycles_lr, lr_div_factor=args.lr_div_factor)
 
 		# Train
 		TextClassifier.train(dataloader_train, dataloader_dev, pos_weight,
