@@ -133,13 +133,13 @@ def doc_to_sample(doc, label_to_idx, word_to_idx= None, word_counter=None, min_f
 	if binary_class:
 		sample['tags'] = np.zeros(n_labels)
 		sample['tags'][tags] = 1.0
-		sample['tags'] = sample['tags'] * label_value + label_value/n_labels
+		sample['tags'] = sample['tags'] * label_value + (1.-label_value)/n_labels
 
 		sample['tags'] = torch.FloatTensor(sample['tags']) #One Hot Encoded target
 	else:
 		sample['tags'] = torch.LongTensor(tags)
 
-	sample['sents'] = sents  # , _ = stack_and_pad_tensors(sents)
+	sample['sents'] = sents
 
 	if doc.encoding is not None: sample['encoding'] = torch.FloatTensor(doc.encoding)
 

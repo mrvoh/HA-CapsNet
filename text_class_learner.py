@@ -5,7 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model import HAN, HGRULWAN, HCapsNet, HCapsNetMultiHeadAtt, MyDataParallel
 from data_utils.data_utils import get_embedding, doc_to_sample, collate_fn_rnn, collate_fn_transformer
-from optimizers.radam import get_cosine_with_hard_restarts_schedule_with_warmup
+from optimizers.radam import get_cosine_with_hard_restarts_schedule_with_warmup, RAdam
 from optimizers.adamw import AdamW
 from utils.logger import get_logger, Progbar
 from utils.metrics import *
@@ -231,7 +231,6 @@ class MultiLabelTextClassifier:
 		# Load embeddings
 		if word_encoder.lower() != 'ulmfit':
 			# initialize optimizer
-			# self.optimizer = RAdam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 			params = self.model.parameters()
 			# get word embeddings
 			vectors = fasttext.load_model(vector_path)
@@ -240,7 +239,6 @@ class MultiLabelTextClassifier:
 			self.model.set_embedding(embed_table)
 		else:
 			# intialize per-layer lr for ULMFiT
-
 			params = [
 				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/self.lr_div_factor},
 				{'params':self.model.caps_classifier.parameters()},
@@ -250,12 +248,11 @@ class MultiLabelTextClassifier:
 			]
 
 
+		# self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
 		self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
 
 		self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(self.optimizer,
 								num_warmup_steps=self.steps_per_epoch, num_training_steps=self.steps_per_epoch*self.num_epochs, num_cycles = self.num_cycles_lr)
-		# self.scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optimizer, T_max=self.num_epochs,
-		# 													  eta_min=self.lr / 10)
 
 		if self.keep_ulmfit_frozen: # Freeze ulmfit completely
 			self.model.sent_encoder.word_encoder.freeze_to(-1)
@@ -301,8 +298,6 @@ class MultiLabelTextClassifier:
 		with torch.no_grad():
 			(sents_batch, tags_batch, encoding_batch) = \
 				collate_fn_rnn([sample]) if self.word_encoder.lower() == 'gru' else collate_fn_transformer([sample])
-			# if self.word_encoder.lower() == 'gru':
-			# 	batch = colla
 
 			preds, word_attention_scores, sent_attention_scores, _ = self.model(sents_batch)
 
@@ -322,7 +317,6 @@ class MultiLabelTextClassifier:
 		else:
 			word_attention_scores = [word_attention_scores]
 
-		# word_attention_scores = [[s*100 for s in sen] for sen in word_attention_scores]
 		return preds, word_attention_scores, sent_attention_scores
 
 	def predict_text(self, text, return_doc=False):
@@ -400,10 +394,9 @@ class MultiLabelTextClassifier:
 
 		return best_score, best_loss, train_step
 
-
 	def _eval_model(self, dataloader_train, dataloader_dev, best_score, best_loss, train_step):
-		# Eval dev
 
+		# Eval dev
 		write_path = os.path.join(self.class_report_dir, '{}'.format(train_step))
 		r_k_dev, p_k_dev, rp_k_dev, ndcg_k_dev, avg_loss_dev,  \
 			hamming_dev, emr_dev, f1_micro_dev, f1_macro_dev = self.eval_dataset(dataloader_dev, K=self.K, write_path=write_path)
@@ -419,8 +412,6 @@ class MultiLabelTextClassifier:
 
 			# self.save(os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev,self.K, rp_k_dev)))
 			self.save(os.path.join(self.save_dir, self.model_name + '.pt'))
-			# torch.save(self.model.state_dict(),
-			# 		   os.path.join(self.save_dir, self.model_name + '_loss={0:.5f}_RP{1}={2:.3f}.pt'.format(avg_loss_dev, self.K, rp_k_dev)))
 			self.logger.info("Saved model with new best score: {0:.3f}".format(best_score))
 		# elif best_loss > avg_loss_dev:
 		# 	best_loss = avg_loss_dev

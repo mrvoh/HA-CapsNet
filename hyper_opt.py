@@ -178,7 +178,7 @@ if __name__ == '__main__':
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
 		# 'weight_decay':hp.loguniform('weight_decay', np.log(0), np.log(0.1)),
 		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.4),
-		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-2)),
+		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-3)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
 		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 5),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
