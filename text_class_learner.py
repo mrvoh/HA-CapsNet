@@ -213,8 +213,8 @@ class MultiLabelTextClassifier:
 		if binary_class:
 			# Initialize training attributes
 			if 'caps' in self.model_name.lower():
-				# self.criterion = FocalLoss() #TODO: test and propagate
-				self.criterion = torch.nn.BCELoss()
+				self.criterion = FocalLoss()
+				# self.criterion = torch.nn.BCELoss()
 			else:
 				if pos_weight:
 					pos_weight = torch.tensor(pos_weight).to(self.device)
