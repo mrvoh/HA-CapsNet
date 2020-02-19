@@ -155,10 +155,14 @@ class ULMFiTEncoder(nn.Module):
 
 		h, c = self.ulmfit(x) 
 
-		x = h[-1]#[:,-1,:] # final hidden state
-		x = self.ln(x)
+		x1 = h[-1]#[:,-1,:] # final hidden state
+		if torch.isnan(x1).any():
+			print('hier')
+		x1 = self.ln(x1)
+		if torch.isnan(x1).any():
+			print('hier')
 		# x = self.bn(x.permute(0,2,1)).permute(0,2,1)
-		return x
+		return x1
 
 class AttentionWordEncoder(nn.Module):
 	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
@@ -207,6 +211,8 @@ class AttentionWordEncoder(nn.Module):
 
 		if self.encoder_type.lower() == 'ulmfit': # ULMFit flow
 			x1 = self.word_encoder(x)
+			if torch.isnan(x1).any():
+				print('hier')
 		else: # Regular word embeddings flow
 			# embeddings
 			x_emb = self.lookup(x)
@@ -217,13 +223,17 @@ class AttentionWordEncoder(nn.Module):
 				x1 = self.word_encoder(self.drop1(x_emb))
 
 		# compute attention
-		Hw = torch.tanh(self.weight_W_word(x1))
+		t = self.weight_W_word(x1)
+		Hw = torch.tanh(t)
 		Hw = Hw + x1  # residual connection
 
 		word_attn = self.drop2(Hw.matmul(self.weight_proj_word))
 		word_attn_norm = self.softmax_word(word_attn)
 		# get sentence representation as weighted avg
 		sen_encoding = x1.mul(word_attn_norm).sum(self.seq_dim)
+
+		if torch.isnan(sen_encoding).any():
+			print('hier')
 
 		return sen_encoding, word_attn_norm
 
@@ -420,6 +430,8 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	return poses, activations
 
 def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
+
+	i = -1
 	last_loss = 0.0
 	while True:
 		if False:
@@ -429,6 +441,9 @@ def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
 			c_ij = leaky_routing[:,:,1:,:].unsqueeze(4)
 		else:
 			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
+		i = i + 1
+		# print(i)
+
 		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
 		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=3)
 
@@ -442,7 +457,7 @@ def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
 		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
 		kde_loss = np.log(kde_loss.item())
 
-		if abs(kde_loss - last_loss) < 0.05:
+		if (abs(kde_loss - last_loss) < 0.05):
 			break
 		else:
 			last_loss = kde_loss
@@ -502,11 +517,13 @@ def KDE_routing(batch_size, b_ij, u_hat):
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
 
+
 class FlattenCaps(nn.Module):
 	def __init__(self):
 		super(FlattenCaps, self).__init__()
+
 	def forward(self, p, a):
-		poses = p.view(p.size(0), p.size(2) * p.size(3) * p.size(4), -1)
+		poses = p.view(p.size(0), p.size(2) * p.size(3) * p.size(4), -1) # [batch size, dim_caps x num instances x .., num caps]
 		# p = p.permute(0,2,3,4,1)
 		# poses = p.view(p.size(0), p.size(1) * p.size(2) * p.size(3), -1)
 		activations = a.view(a.size(0), a.size(1) * a.size(2) * a.size(3), -1)
@@ -529,8 +546,11 @@ class PrimaryCaps(nn.Module):
 		u = self.capsules(x)
 
 		u = u.view(batch_size, self.num_capsules, self.out_channels, -1, 1)
-		poses = squash_v1(u, axis=1)
-		activations = torch.sqrt((poses ** 2).sum(1))
+		# u = u.permute(0,2,1,3,4)
+		poses = squash_v1(u, axis=2)
+		activations = torch.sqrt((poses ** 2).sum(2))
+		# poses = squash_v1(u, axis=1)
+		# activations = torch.sqrt((poses ** 2).sum(1))
 		return poses, activations
 
 class FCCaps(nn.Module):
@@ -603,11 +623,13 @@ class CapsNet_Text(nn.Module):
 
 		self.flatten_capsules = FlattenCaps()
 
-		self.W_doc = nn.Parameter(torch.FloatTensor( input_size * dim_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
+		self.W_doc = nn.Parameter(torch.FloatTensor( input_size * num_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
 		torch.nn.init.xavier_uniform_(self.W_doc)
 
-		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,
-								  in_channels=num_caps, out_channels=num_caps, KDE_epsilon=KDE_epsilon)
+		# self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,
+		# 						  in_channels=num_caps, out_channels=num_caps, KDE_epsilon=KDE_epsilon)
+		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num=num_classes, input_capsule_num=num_compressed_caps,
+											in_channels=dim_caps, out_channels=dim_caps, KDE_epsilon=KDE_epsilon)
 
 		self.drop = nn.Dropout2d(p=dropout_caps)
 
@@ -615,7 +637,7 @@ class CapsNet_Text(nn.Module):
 		self.recon_error_lambda = lambda_reg_caps # factor to scale down reconstruction loss with
 		self.rescale = nn.Parameter(torch.Tensor([7]))
 		reconstruction_size = 800 #TODO: change
-		self.reconstruct0 = nn.Linear(num_caps * num_classes, int((reconstruction_size * 2) / 3))
+		self.reconstruct0 = nn.Linear(dim_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
 		# self.bn = nn.BatchNorm2d(num_classes)
@@ -624,19 +646,23 @@ class CapsNet_Text(nn.Module):
 		self.sigmoid = nn.Sigmoid()
 
 	def compression(self, poses, W):
+
+		# poses = torch.matmul(poses, W)
 		poses = torch.matmul(poses.permute(0,2,1), W).permute(0,2,1)
 		activations = torch.sqrt((poses ** 2).sum(2))
 		return poses, activations
 
 	def forward(self, doc):
 
-		poses_doc, activations_doc = self.primary_capsules_doc(doc)
+		poses, activations = self.primary_capsules_doc(doc)
 
-		poses, activations = self.flatten_capsules(poses_doc, activations_doc)
+		# poses, activations = self.flatten_capsules(poses, activations)
 		poses = self.drop(poses)
+		drop_poses = poses
 		#TODO: test 1d vs 2d dropout as regularization
-		poses, activations = self.compression(poses, self.W_doc)
-		poses, activations = self.fc_capsules_doc_child(poses)
+		poses, activations = self.compression(poses.squeeze(), self.W_doc)
+
+		poses, activations = self.fc_capsules_doc_child(poses.squeeze())
 		return poses, activations
 
 	def forward_old(self, data, labels): # Use when second model is used to limit label space to route for caps net

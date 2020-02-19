@@ -244,7 +244,8 @@ class HCapsNet(nn.Module):
         sents = sents.view(-1, sen_len)
 
         sen_encodings, word_attn_weight = self.sent_encoder(sents)
-
+        if torch.isnan(sen_encodings).any():
+            print('hier')
         sen_encodings = sen_encodings.view(n_doc, n_sents, -1)
         # Encode docs
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)

@@ -156,7 +156,8 @@ class MultiLabelTextClassifier:
 		elif params['model_name'].lower() == 'hcapsnetmultiheadatt':
 			model = HCapsNetMultiHeadAtt(num_tokens = num_tokens, num_classes = num_classes, **params_no_weight)
 
-		params['state_dict'] = {k.replace('module.', '', 1):v for k,v in params['state_dict'].items()}
+		# Strip prefixes created by DataParallel
+		params['state_dict'] = {k.replace('module.', '', 1) if k.startswith('module.') else k:v for k,v in params['state_dict'].items()}
 		model.load_state_dict(params['state_dict'])
 		if torch.cuda.device_count() > 1:
 			print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -171,7 +172,7 @@ class MultiLabelTextClassifier:
 
 	def init_model(self, embed_dim, word_hidden, sent_hidden, dropout, vector_path, word_encoder = 'gru', sent_encoder = 'gru',
 				   dim_caps=16, num_caps = 25, num_compressed_caps = 100, dropout_caps = 0.2, lambda_reg_caps = 0.0005, pos_weight=None, nhead_doc=5,
-				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True, KDE_epsilon = 0.05):
+				   ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0, binary_class = True, KDE_epsilon = 0.05, num_cycles_lr = 5, lr_div_factor = 10):
 
 		self.embed_size = embed_dim
 		self.word_hidden = word_hidden
@@ -181,6 +182,8 @@ class MultiLabelTextClassifier:
 		self.sent_encoder = sent_encoder
 		self.ulmfit_pretrained_path = ulmfit_pretrained_path
 		self.binary_class = binary_class
+		self.num_cycles_lr = num_cycles_lr
+		self.lr_div_factor = lr_div_factor
 
 		# Initialize model and load pretrained weights if given
 		self.logger.info("Building model...")
@@ -216,8 +219,6 @@ class MultiLabelTextClassifier:
 		else:
 			if 'caps' in self.model_name.lower():
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-				# self.criterion = CategoricalCrossEntropyWithSoftmax()
-				# self.criterion = torch.nn.NLLLoss()
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
@@ -236,28 +237,20 @@ class MultiLabelTextClassifier:
 			self.model.set_embedding(embed_table)
 		else:
 			# intialize per-layer lr for ULMFiT
-			eta = 2.6 # from ULMFiT paper
-			num_layers = 4
-			lr_div_factor = 8
 
 			params = [
-				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/lr_div_factor},
+				{'params':self.model.sent_encoder.word_encoder.parameters(), 'lr':self.lr/self.lr_div_factor},
 				{'params':self.model.caps_classifier.parameters()},
 				{'params':self.model.doc_encoder.parameters()},
 				{'params':self.model.sent_encoder.weight_W_word.parameters()},
 				{'params':self.model.sent_encoder.weight_proj_word}
 			]
 
-			# ulmfit_params = list(self.model.sent_encoder.word_encoder.parameters())
-			# params = [{"params":[p for p in self.model.parameters() if not any([p.equal(up) for up in ulmfit_params])]}]
-			# params.extend([
-			# 	{"params": self.model.sent_encoder.word_encoder.get_layer_params(i), "lr": self.lr / eta**i} for i in range(num_layers)
-			# ])
-			# self.optimizer = RAdam(params, lr = self.lr,  weight_decay=self.weight_decay)
+
 		self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
 
 		self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(self.optimizer,
-								num_warmup_steps=self.steps_per_epoch, num_training_steps=self.steps_per_epoch*self.num_epochs, num_cycles = self.num_epochs/5)
+								num_warmup_steps=self.steps_per_epoch, num_training_steps=self.steps_per_epoch*self.num_epochs, num_cycles = self.num_cycles_lr)
 		# self.scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optimizer, T_max=self.num_epochs,
 		# 													  eta_min=self.lr / 10)
 
@@ -394,7 +387,7 @@ class MultiLabelTextClassifier:
 			else:
 				loss.backward()
 
-			# torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+			torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
 			optimizer.step()
 			if use_prog_bar: prog.update(batch_idx + 1, values=[("train loss", loss.item()), ("recon loss", rec_loss)])
 			torch.cuda.empty_cache()
