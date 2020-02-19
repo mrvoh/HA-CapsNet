@@ -33,7 +33,7 @@ def write_interm_results(params, loss):
 
 def set_params(params, config_path):
 
-	for param in ['num_compressed_caps', 'min_freq_word', 'sent_hidden']:
+	for param in ['num_compressed_caps', 'min_freq_word', 'sent_hidden', 'num_cycles_lr']:
 		params[param] = int(params[param])
 	# reads in config file and overwrites params for optimization
 	config = configparser.ConfigParser()

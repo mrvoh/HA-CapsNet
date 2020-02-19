@@ -4,8 +4,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 import copy
-# from transformer import Encoder as TransformerEncoder
-# from flair.embeddings import * #StackedEmbeddings, BertEmbeddings, ELMoEmbeddings, FlairEmbeddings
 from torchnlp.encoders.text import stack_and_pad_tensors
 from fastai.text import *
 # from fastai
@@ -80,16 +78,12 @@ class ULMFiTEncoder(nn.Module):
 
 		lm = AWD_LSTM(**config)
 		#TODO: save config in state_dict when finetuning
-		# lm = get_language_model(AWD_LSTM, num_tokens, config=config, drop_mult=dropout_factor)
-		#
-		# lm.load_encoder(pretrained_path)
+
 		sd = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
 		lm.load_state_dict(sd)
-		# self.bn = nn.BatchNorm1d(config['emb_sz'])
-		self.ln = nn.LayerNorm(config['emb_sz'])
-		# hacky way to extract only the AWD-LSTM from the language model (SequentialRNN) which also contains a linear decoder
 
-		self.ulmfit = lm #next(lm.modules())[0]
+		self.ln = nn.LayerNorm(config['emb_sz'])
+		self.ulmfit = lm
 
 		self.layer_map = stop_map = {
 			0:10, # lstm layer 3
@@ -155,13 +149,10 @@ class ULMFiTEncoder(nn.Module):
 
 		h, c = self.ulmfit(x) 
 
-		x1 = h[-1]#[:,-1,:] # final hidden state
-		if torch.isnan(x1).any():
-			print('hier')
+		x1 = h[-1] # final hidden state
+
 		x1 = self.ln(x1)
-		if torch.isnan(x1).any():
-			print('hier')
-		# x = self.bn(x.permute(0,2,1)).permute(0,2,1)
+
 		return x1
 
 class AttentionWordEncoder(nn.Module):
@@ -198,23 +189,19 @@ class AttentionWordEncoder(nn.Module):
 
 		self.weight_W_word = nn.Linear(word_out, word_out)
 		self.weight_proj_word = nn.Parameter(torch.Tensor(word_out, 1))
+		torch.nn.init.xavier_normal_(self.weight_W_word.weight)
+		torch.nn.init.xavier_normal_(self.weight_proj_word)
 
 		self.seq_dim = 0 if self.encoder_type.lower() == 'gru' else 1
 		self.softmax_word = nn.Softmax(dim=self.seq_dim)
 		self.drop1 = nn.Dropout(dropout)
 		self.drop2 = nn.Dropout(dropout)
-		self.weight_proj_word.data.normal_(0, 1 / np.sqrt(word_out))
-
-
 
 	def forward(self, x):
 
 		if self.encoder_type.lower() == 'ulmfit': # ULMFit flow
 			x1 = self.word_encoder(x)
-			if torch.isnan(x1).any():
-				print('hier')
 		else: # Regular word embeddings flow
-			# embeddings
 			x_emb = self.lookup(x)
 
 			if self.encoder_type.lower() == 'gru':
@@ -231,9 +218,6 @@ class AttentionWordEncoder(nn.Module):
 		word_attn_norm = self.softmax_word(word_attn)
 		# get sentence representation as weighted avg
 		sen_encoding = x1.mul(word_attn_norm).sum(self.seq_dim)
-
-		if torch.isnan(sen_encoding).any():
-			print('hier')
 
 		return sen_encoding, word_attn_norm
 
@@ -290,8 +274,10 @@ class AttentionSentEncoder(nn.Module):
 		self.weight_W_sent = nn.Linear(sent_out, sent_out)
 		self.weight_proj_sent = nn.Parameter(torch.Tensor(sent_out, 1))
 
+		torch.nn.init.xavier_normal_(self.weight_W_sent.weight)
+		torch.nn.init.xavier_normal_(self.weight_proj_sent)
+
 		self.softmax_sent = nn.Softmax(dim=1)
-		self.weight_proj_sent.data.normal_(0, 0.01)
 
 	def forward(self, x):
 
@@ -314,12 +300,12 @@ class AttentionSentEncoder(nn.Module):
 	def get_init_params(self):
 
 		params = {
-		'sent_hidden':self.sent_hidden,
-		'dropout':self.dropout,
-		'sent_encoder':self.encoder_type,
-		'num_layers_sen':self.num_layers,
-		'nhead_sen':self.nhead,
-		'bidirectional':self.bidirectional
+			'sent_hidden':self.sent_hidden,
+			'dropout':self.dropout,
+			'sent_encoder':self.encoder_type,
+			'num_layers_sen':self.num_layers,
+			'nhead_sen':self.nhead,
+			'bidirectional':self.bidirectional
 		}
 
 		return params
@@ -347,6 +333,8 @@ class GRUMultiHeadAtt(nn.Module):
 
 		self.sent_gru = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
 		self.U = nn.Linear(sent_gru_out, nhead_doc)
+		torch.nn.init.xavier_normal_(self.U.weight)
+
 
 		self.softmax_sent = nn.Softmax(dim=1)
 
@@ -374,7 +362,6 @@ class GRUMultiHeadAtt(nn.Module):
 
 	def forward(self, word_attention_vectors):
 
-
 		word_attention_vectors = self.drop1(self.bn1(word_attention_vectors.permute(0, 2, 1))).permute(0, 2, 1)
 		output_sent, _ = self.sent_gru(word_attention_vectors)
 		B, N, d_c = output_sent.size()
@@ -392,7 +379,6 @@ class GRUMultiHeadAtt(nn.Module):
 		if not self.aggregate_output:
 			return V, A
 		else:
-			# V = V.sum(dim=0)
 			V = self.drop2(self.bn2(V.permute(0, 2, 1))).permute(0, 2, 1)
 
 			y = V.mul(self.out)
@@ -428,42 +414,6 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	poses = v_j.squeeze(1)
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
-
-# def Adaptive_KDE_routing(batch_size, b_ij, u_hat):
-#
-# 	i = -1
-# 	last_loss = 0.0
-# 	while True:
-# 		if False:
-# 			leak = torch.zeros_like(b_ij).sum(dim=2, keepdim=True)
-# 			leaky_logits = torch.cat((leak, b_ij),2)
-# 			leaky_routing = F.softmax(leaky_logits, dim=2)
-# 			c_ij = leaky_routing[:,:,1:,:].unsqueeze(4)
-# 		else:
-# 			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
-# 		i = i + 1
-# 		# print(i)
-#
-# 		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
-# 		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=3)
-#
-# 		dd = squash_v1(u_hat, axis=3)
-# 		dd = 1 - ((dd -v_j)** 2).sum(3)
-# 		b_ij = b_ij + dd
-#
-# 		c_ij = c_ij.view(batch_size, c_ij.size(1), c_ij.size(2))
-# 		dd = dd.view(batch_size, dd.size(1), dd.size(2))
-#
-# 		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
-# 		kde_loss = np.log(kde_loss.item())
-#
-# 		if (abs(kde_loss - last_loss) < 0.05):
-# 			break
-# 		else:
-# 			last_loss = kde_loss
-# 	poses = v_j.squeeze(1)
-# 	activations = torch.sqrt((poses ** 2).sum(2))
-# 	return poses, activations
 
 def Adaptive_KDE_routing(batch_size, b_ij, u_hat, leaky_softmax=True, epsilon=0.05):
 	last_loss = 0.0
@@ -524,8 +474,7 @@ class FlattenCaps(nn.Module):
 
 	def forward(self, p, a):
 		poses = p.view(p.size(0), p.size(2) * p.size(3) * p.size(4), -1) # [batch size, dim_caps x num instances x .., num caps]
-		# p = p.permute(0,2,3,4,1)
-		# poses = p.view(p.size(0), p.size(1) * p.size(2) * p.size(3), -1)
+
 		activations = a.view(a.size(0), a.size(1) * a.size(2) * a.size(3), -1)
 		return poses, activations
 
@@ -546,11 +495,10 @@ class PrimaryCaps(nn.Module):
 		u = self.capsules(x)
 
 		u = u.view(batch_size, self.num_capsules, self.out_channels, -1, 1)
-		# u = u.permute(0,2,1,3,4)
+
 		poses = squash_v1(u, axis=2)
 		activations = torch.sqrt((poses ** 2).sum(2))
-		# poses = squash_v1(u, axis=1)
-		# activations = torch.sqrt((poses ** 2).sum(1))
+
 		return poses, activations
 
 class FCCaps(nn.Module):
@@ -603,7 +551,6 @@ class FCCaps(nn.Module):
 		if self.is_AKDE == True:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
 		else:
-			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
 			poses, activations = KDE_routing(batch_size, b_ij, u_hat)
 		return poses, activations
 
@@ -625,8 +572,6 @@ class CapsNet_Text(nn.Module):
 		self.W_doc = nn.Parameter(torch.FloatTensor(num_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
 		torch.nn.init.xavier_uniform_(self.W_doc)
 
-		# self.fc_capsules_doc_child = FCCaps(True, output_capsule_num= num_classes, input_capsule_num=num_compressed_caps,
-		# 						  in_channels=num_caps, out_channels=num_caps, KDE_epsilon=KDE_epsilon)
 		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num=num_classes, input_capsule_num=num_compressed_caps,
 											in_channels=dim_caps, out_channels=dim_caps, KDE_epsilon=KDE_epsilon)
 
@@ -639,7 +584,11 @@ class CapsNet_Text(nn.Module):
 		self.reconstruct0 = nn.Linear(dim_caps * num_classes, int((reconstruction_size * 2) / 3))
 		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
 		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
-		# self.bn = nn.BatchNorm2d(num_classes)
+
+		# init linear layers
+		torch.nn.init.kaiming_normal_(self.reconstruct0.weight, mode='fan_in')
+		torch.nn.init.kaiming_normal_(self.reconstruct1.weight, mode='fan_in')
+		torch.nn.init.kaiming_normal_(self.reconstruct1.weight, mode='fan_in')
 
 		self.relu = nn.ReLU(inplace=True)
 		self.sigmoid = nn.Sigmoid()
@@ -710,14 +659,10 @@ class CapsNet_Text(nn.Module):
 		output = self.relu(self.reconstruct0(masked))
 		output = self.relu(self.reconstruct1(output))
 		output = self.reconstruct2(output)
-		# output = output.view(-1, self.image_channels, self.image_height, self.image_width)
-		#test: normalize doc encoding and reconstruction
-		# output = output.div(output.norm(p=2, dim=1, keepdim=True))
-		# doc_enc = doc_enc.div(doc_enc.norm(p=2, dim=1, keepdim=True))
+
 		# The reconstruction loss is the sum squared difference between the input image and reconstructed image.
 		# Multiplied by a small number so it doesn't dominate the margin (class) loss.
 		error = (output - doc_enc)
-		# error = error.view(output.size(0), -1)
 		error = error ** 2
 		error = torch.sum(error, dim=1) * self.recon_error_lambda
 
