@@ -106,7 +106,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--max_evals",
-						default=50,
+						default=20,
 						type=int,
 						help="Total nr of optimization steps.")
 	parser.add_argument("--K",
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of splits for cross validation")
 	parser.add_argument("--preload_trials",
-						action='store_true',
+						action='store_false',
 						help="Whether to preload an existing trials object.")
 	parser.add_argument("--in_trials_path",
 						default='trials_tmp.pkl',
@@ -137,17 +137,17 @@ if __name__ == '__main__':
 						required=False,
 						help="Path from where to read the config for training.")
 	parser.add_argument("--train_path",
-						default=os.path.join('dataset','reuters','train.pkl'),
+						default=os.path.join('dataset','trec','train.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
 	parser.add_argument("--test_path",
-						default=os.path.join('dataset','reuters','dev.pkl'),
+						default=os.path.join('dataset','trec','test.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
 	parser.add_argument("--label_to_idx_path",
-						default=os.path.join('dataset', 'reuters', 'label_to_idx.json'),
+						default=os.path.join('dataset', 'trec', 'label_to_idx.json'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
@@ -182,7 +182,7 @@ if __name__ == '__main__':
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
 		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 5),
 		'label_value':hp.uniform('label_value', 0.9, 1.0),
-		'sent_hidden':hp.quniform('sent_hidden', 20, 400, 10),
+		'sent_hidden':hp.quniform('sent_hidden', 20, 512, 10),
 		'min_freq_word':hp.quniform('min_freq_word', 1, 50,1),
 		'num_cycles_lr':hp.quniform('num_cycles_lr',1,10,1),
 		'lr_div_factor':hp.uniform('lr_div_factor',1,20)
@@ -225,4 +225,4 @@ if __name__ == '__main__':
 				f.write(field.ljust(length+1))
 			f.write('\n')
 			f.write("{:03f}".format(result))
-			f.write(' '.join() + '\n')
+			# f.write(' '.join() + '\n')

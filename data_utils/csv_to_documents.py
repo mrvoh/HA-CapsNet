@@ -49,7 +49,50 @@ def docs_to_sheet(in_path, out_path, label_to_idx_path, use_excel = False, delim
 
 	return df
 
+def df_to_docs(df, label_to_idx, out_dir, do_split, dev_percentage, store_df, set_name, restructure_doc=True, max_seq_len=100,
+			  use_ulmfit=False, delimiter='\t', encoding='utf-8', use_excel=True, text_cols='text', target_prefix='topic_',
+			  binary_class=True):
+	assert 0 < dev_percentage < 1, "the percentage of data to be used for dev should be between 0 and 1."
+	# Make sure the output dir exists
+	if not os.path.exists(out_dir):
+		os.makedirs(out_dir)
 
+	idx_to_label = {v:k for k,v in label_to_idx.items()}
+	target_cols = [col for col in df.columns if target_prefix in col]
+
+	dfs = [(df, set_name)]
+
+	if do_split:
+		cols = df.columns
+		y = df[target_cols].astype(int).values
+		train, _, dev, _ = iterative_train_test_split(df.values, y, test_size=dev_percentage)
+
+		df_train = pd.DataFrame(train, columns=cols)
+		df_dev = pd.DataFrame(dev, columns=cols)
+		dfs = [(df_train, 'train'), (df_dev, 'dev')]
+
+	if store_df:
+		for df, name in dfs:
+			out_path = os.path.join(out_dir, name)
+			if use_excel:
+				df.to_excel(out_path+'.xlsx', encoding=encoding)
+			else:
+				df.to_csv(out_path+'.csv', sep=delimiter, encoding=encoding)
+
+	# Convert rows to Documents
+	text_preprocessor = TextPreprocessor(use_ulmfit)
+
+	for df, name in dfs:
+		docs = [Document(text=row.text,
+						 text_preprocessor=text_preprocessor,
+						 filename='test',
+						 tags=[idx_to_label[int(t)] for t in np.argwhere(row[target_cols].values == 1)],
+						 restructure_doc=restructure_doc,
+						 split_size_long_seqs=max_seq_len)
+				for ix, row in tqdm(df.iterrows())]
+
+		with open(os.path.join(out_dir, name + '.pkl'), 'wb') as f:
+			pickle.dump(docs, f)
 
 
 def sheet_to_docs(in_path, out_dir, dev_percentage, test_percentage, restructure_doc=True, max_seq_len=50,

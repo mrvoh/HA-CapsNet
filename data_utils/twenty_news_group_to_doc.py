@@ -6,6 +6,7 @@ import pickle
 from tqdm import tqdm
 import json
 
+
 def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, use_ulmfit=False):
 
 	assert 0 < percentage_train <= 1, "The percentage of docs to be used for training should be between 0 and 1."

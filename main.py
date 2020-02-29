@@ -34,7 +34,7 @@ def main(use_prog_bar=True):
 	#########################################################################################
 
 	args, parser = get_parser()
-
+	print(args)
 	use_rnn = args.word_encoder == 'gru'
 	train_path, dev_path, test_path = (args.train_path, args.dev_path, args.test_path)
 	label_to_idx_path = args.label_to_idx_path

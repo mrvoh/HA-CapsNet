@@ -14,7 +14,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 	# retrieve data and create splits
-	train_full = trec_dataset(train=True, fine_grained=True)
+	train_full = trec_dataset(train=True, fine_grained=False)
 	shuffle(train_full)
 	train = train_full[:int(percentage_train*len(train_full))]
 	dev = train_full[int(percentage_train*len(train_full)):]
@@ -22,7 +22,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	# Get label mapping
 	label_to_idx = {k:ix for ix,k in enumerate(set([doc['label'] for doc in train_full]))}
 	del train_full
-	test = trec_dataset(test=True, fine_grained=True)
+	test = trec_dataset(test=True, fine_grained=False)
 	# initiate text preprocessor
 
 	text_preprocessor = TextPreprocessor(use_ulmfit)
@@ -46,6 +46,5 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 		json.dump(label_to_idx, f)
 
 
-
 if __name__ == '__main__':
-	None
+	pass

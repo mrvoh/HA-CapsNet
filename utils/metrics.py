@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss, precision_recall_fscore_support, roc_auc_score
 from sklearn.utils.multiclass import type_of_target
+from sklearn.metrics import roc_curve, auc
 import os
 
 def _preprocess_y(y_true, y_pred, convert_logits, binary_class):
@@ -22,6 +23,7 @@ def _preprocess_y(y_true, y_pred, convert_logits, binary_class):
 	y_true = np.round(y_true).astype(int)
 
 	return y_true, y_pred
+
 
 def write_classification_report( filepath, y_pred, y_true, label_to_idx, convert_logits, binary_class):
 	"""
@@ -78,6 +80,26 @@ def hamming_score(y_true, y_pred, normalize=True, sample_weight=None):
         acc_list.append(tmp_a)
     return np.mean(acc_list)
 
+
+def roc_auc_micro(y_true, y_pred):
+	# Compute ROC curve and ROC area for each class
+	fpr = dict()
+	tpr = dict()
+	roc_auc = dict()
+
+	num_labels = np.max(y_true)
+
+
+	for i in range(num_labels):
+		fpr[i], tpr[i], _ = roc_curve(y_true[:, i], y_pred[:, i])
+		roc_auc[i] = auc(fpr[i], tpr[i])
+
+	# Compute micro-average ROC curve and ROC area
+	fpr["micro"], tpr["micro"], _ = roc_curve(y_true.ravel(), y_pred.ravel())
+	roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+	return roc_auc['micro']
+
 def accuracy(y_true, y_pred, convert_logits, binary_class):
 	# Computed accuracy and related metrics
 	y_true, y_pred = _preprocess_y(y_true, y_pred, convert_logits, binary_class)
@@ -86,12 +108,12 @@ def accuracy(y_true, y_pred, convert_logits, binary_class):
 	emr = accuracy_score(y_true, y_pred, normalize=True)
 	f1_micro = f1_score(y_true, y_pred, average='micro')
 	f1_macro = f1_score(y_true, y_pred, average='macro')
-	# roc_auc = roc_auc_score(y_true, y_pred, average='weighted')
+	# roc_auc = roc_auc_micro(y_true, y_pred)
 	# if binary_class:
 	# 	mcc = matthews_corrcoef(y_true, y_pred)
 	# 	return hamming, emr, f1_micro, f1_macro, mcc
 
-	return hamming, emr, f1_micro, f1_macro
+	return hamming, emr, f1_micro, f1_macro, 0 #, roc_auc
 
 
 
