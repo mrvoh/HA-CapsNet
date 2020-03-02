@@ -207,7 +207,7 @@ def main(use_prog_bar=True):
 		# Fix for when not all labels are present in train set
 		if len(pos_weight) != len(label_to_idx):
 			pos_weight = None
-		dataloader_train = get_data_loader(train_dataset, args.train_batch_size, True, use_rnn)
+		dataloader_train = get_data_loader(train_dataset, args.train_batch_size, True, use_rnn, is_train=True)
 
 		# Save word_mapping
 		with open(args.word_to_idx_path, 'w') as f:
@@ -221,7 +221,7 @@ def main(use_prog_bar=True):
 																	label_to_idx=label_to_idx, min_freq_word=None,
 																	unk=unk, pad=pad, label_value = args.label_value,
 																	binary_class=args.binary_class)
-		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, True, use_rnn)
+		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, True, use_rnn, is_train=False)
 		# Free some memory
 		del dev_dataset
 		del dev_docs
@@ -280,7 +280,7 @@ def main(use_prog_bar=True):
 													   label_value = args.label_value,
 													   binary_class=args.binary_class)
 
-		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn)
+		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn, is_train=False)
 
 		return TextClassifier.eval_dataset(dataloader_test)
 

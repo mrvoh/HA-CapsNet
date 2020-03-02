@@ -50,10 +50,10 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	test_df = reuters_to_df('test', label_to_idx)
 
 	# Store dfs and pickled doc files
-	df_to_docs(train_df, label_to_idx, out_dir, True, 1-percentage_train, True, 'train',
-			   restructure_doc=restructure_doc, max_seq_len=max_seq_len, use_ulmfit=use_ulmfit)
-	df_to_docs(test_df, label_to_idx, out_dir, True, 1 - percentage_train, True, 'test',
-			   restructure_doc=restructure_doc, max_seq_len=max_seq_len, use_ulmfit=use_ulmfit)
+	df_to_docs(train_df, label_to_idx, out_dir, do_split=True, dev_percentage=1-percentage_train, store_df=True,
+			   set_name='train', restructure_doc=restructure_doc, max_seq_len=max_seq_len, use_ulmfit=use_ulmfit)
+	df_to_docs(test_df, label_to_idx, out_dir, do_split=False, dev_percentage=.5, store_df=True,
+			   set_name='test', restructure_doc=restructure_doc, max_seq_len=max_seq_len, use_ulmfit=use_ulmfit)
 
 	label_to_idx_path = os.path.join(out_dir, 'label_to_idx.json')
 	with open(label_to_idx_path, 'w', encoding='utf-8') as f:
