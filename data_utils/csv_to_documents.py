@@ -57,6 +57,9 @@ def df_to_docs(df, label_to_idx, out_dir, do_split, dev_percentage, store_df, se
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 
+	# df = df.applymap(lambda x: x.encode('unicode_escape').
+	# 				   decode('utf-8') if isinstance(x, str) else x)
+
 	idx_to_label = {v:k for k,v in label_to_idx.items()}
 	target_cols = [col for col in df.columns if target_prefix in col]
 
@@ -75,7 +78,7 @@ def df_to_docs(df, label_to_idx, out_dir, do_split, dev_percentage, store_df, se
 		for df, name in dfs:
 			out_path = os.path.join(out_dir, name)
 			if use_excel:
-				df.to_excel(out_path+'.xlsx', encoding=encoding)
+				df.to_excel(out_path+'.xlsx', encoding=encoding, engine='xlsxwriter')
 			else:
 				df.to_csv(out_path+'.csv', sep=delimiter, encoding=encoding)
 

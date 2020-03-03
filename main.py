@@ -138,16 +138,17 @@ def main(use_prog_bar=True):
 		#TODO: more efficient?
 		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx), args.dropout_factor)
 		encoder.eval()
-		for p in [train_path, dev_path, test_path]:
-			with open(p, 'rb') as f:
-				docs = pickle.load(f)
-			# set the encoding for all docs
-			[doc.set_encoding(encoder.encode(torch.LongTensor(
-				[word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(
-				0)).detach().numpy()) for doc in tqdm.tqdm(docs)]
+		with torch.no_grad():
+			for p in [train_path, dev_path, test_path]:
+				with open(p, 'rb') as f:
+					docs = pickle.load(f)
+				# set the encoding for all docs
+				[doc.set_encoding(encoder.encode(torch.LongTensor(
+					[word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(
+					0)).detach().numpy()) for doc in tqdm.tqdm(docs)]
 
-			with open(p, 'wb') as f:
-				pickle.dump(docs, f)
+				with open(p, 'wb') as f:
+					pickle.dump(docs, f)
 
 	if args.create_wordvecs:  # Create word vectors from train documents
 		print('Creating word vectors')
