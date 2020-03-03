@@ -214,14 +214,15 @@ class MultiLabelTextClassifier:
 			# Initialize training attributes
 			if 'caps' in self.model_name.lower():
 				# self.criterion = FocalLoss()
-				self.criterion = torch.nn.BCELoss()
+				self.criterion = MarginLoss(0.9, 0.1, 0.5, True)
+				# self.criterion = torch.nn.BCELoss()
 			else:
 				if pos_weight:
 					pos_weight = torch.tensor(pos_weight).to(self.device)
 				self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 		else:
 			if 'caps' in self.model_name.lower():
-				self.criterion = MarginLoss(0.95, 0.05, 0.5)
+				self.criterion = MarginLoss(0.9, 0.1, 0.5, False)
 					#torch.nn.CrossEntropyLoss(reduction='mean')
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
