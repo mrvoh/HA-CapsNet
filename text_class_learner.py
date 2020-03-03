@@ -11,7 +11,7 @@ from utils.logger import get_logger, Progbar
 from utils.metrics import *
 from document_model import Document, TextPreprocessor
 from losses.focal_loss import FocalLoss
-
+from losses.margin_loss import MarginLoss
 try:
 	import fasttext
 except:
@@ -221,7 +221,8 @@ class MultiLabelTextClassifier:
 				self.criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='mean')
 		else:
 			if 'caps' in self.model_name.lower():
-				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
+				self.criterion = MarginLoss(0.95, 0.05, 0.5)
+					#torch.nn.CrossEntropyLoss(reduction='mean')
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 
