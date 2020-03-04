@@ -106,7 +106,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--max_evals",
-						default=50,
+						default=40,
 						type=int,
 						help="Total nr of optimization steps.")
 	parser.add_argument("--K",
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 						type=int,
 						help="Number of splits for cross validation")
 	parser.add_argument("--preload_trials",
-						action='store_false',
+						action='store_true',
 						help="Whether to preload an existing trials object.")
 	parser.add_argument("--in_trials_path",
 						default='trials_tmp.pkl',
@@ -137,22 +137,25 @@ if __name__ == '__main__':
 						required=False,
 						help="Path from where to read the config for training.")
 	parser.add_argument("--train_path",
-						default=os.path.join('dataset','trec','train.pkl'),
+						default=os.path.join('dataset','reuters','train.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
 	parser.add_argument("--test_path",
-						default=os.path.join('dataset','trec','dev.pkl'),
+						default=os.path.join('dataset','reuters','dev.pkl'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
 	parser.add_argument("--label_to_idx_path",
-						default=os.path.join('dataset', 'trec', 'label_to_idx.json'),
+						default=os.path.join('dataset', 'reuters', 'label_to_idx.json'),
 						type=str,
 						required=False,
 						help="The path where to dump logging.")
 
 	args = parser.parse_args()
+
+	print("Optimization args")
+	print(args)
 	###########################################
 	# INPUT VARIABLES
 	###########################################
@@ -165,12 +168,17 @@ if __name__ == '__main__':
 	K = args.K
 	config_path = args.config_path
 
+	# workaround for wrong reference of parameters file
+	default_params_file = 'parameters.ini'
+	os.rename(config_path, default_params_file)
+	config_path = default_params_file
+
 	# data settings
 	train_path = args.train_path
 	test_path = args.test_path
 	label_to_idx_path = args.label_to_idx_path
 
-	sys.argv = [sys.argv[0]]  # to untangle command lind arguments of hyper_opt and main
+	sys.argv = [sys.argv[0]]  # to untangle command line arguments of hyper_opt and main
 
 	###########################################
 	# define search space
@@ -178,7 +186,7 @@ if __name__ == '__main__':
 		'dropout':hp.uniform('dropout', 0.25, 0.75),
 		# 'weight_decay':hp.loguniform('weight_decay', np.log(0), np.log(0.1)),
 		'dropout_caps':hp.uniform('dropout_caps', 0.0, 0.4),
-		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-3)),
+		'lambda_reg_caps':hp.loguniform('lambda_reg_caps', np.log(1e-7), np.log(1e-1)),
 		'dropout_factor':hp.uniform('dropout_factor', 1.0, 3.0),
 		'num_compressed_caps':hp.quniform('num_compressed_caps', 50, 250, 5),
 		# 'label_value':hp.uniform('label_value', 0.9, 1.0),

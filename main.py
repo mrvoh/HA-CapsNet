@@ -115,7 +115,7 @@ def main(use_prog_bar=True):
 			imdb_parse(args.write_data_dir, args.percentage_train,
 						  use_ulmfit=args.word_encoder.lower() == 'ulmfit',
 						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)
-		elif args.dataset_name.lower() == '20news':
+		elif args.dataset_name.lower() == 'twentynews':
 			twenty_news_parse(args.write_data_dir, args.percentage_train,
 						  use_ulmfit=args.word_encoder.lower() == 'ulmfit',
 						  restructure_doc=args.restructure_docs, max_seq_len=args.max_seq_len)

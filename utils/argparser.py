@@ -208,7 +208,6 @@ def get_parser():
 						required=True,
 						help="The path from where the word mapping is to be retrieved.")
 	parser.add_argument("--label_to_idx_path",
-						default=os.path.join('dataset', 'reuters', 'label_to_idx.json'),
 						type=str,
 						required=True,
 						help="The path from where the label mapping is to be retrieved.")
