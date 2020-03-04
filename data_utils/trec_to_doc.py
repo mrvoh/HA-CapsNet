@@ -1,17 +1,16 @@
 from torchnlp.datasets import trec_dataset
-from document_model import Document, TextPreprocessor
-from random import shuffle
 import os
-import pickle
-from tqdm import tqdm
 import json
 import pandas as pd
 import numpy as np
 from data_utils.csv_to_documents import df_to_docs
 
-def trec_to_df(is_train, label_to_idx):
+def trec_to_df(is_train, label_to_idx=None):
 
 	dset = trec_dataset(train=is_train, fine_grained=False, test=not is_train)
+
+	if label_to_idx is None:
+		label_to_idx = {k: ix for ix, k in enumerate(set([doc['label'] for doc in dset]))}
 
 	# create one hot encoding of labels
 	num_labels = len(label_to_idx)
@@ -31,7 +30,7 @@ def trec_to_df(is_train, label_to_idx):
 
 	df[label_cols] = all_labels
 
-	return df
+	return df, label_to_idx
 
 def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, use_ulmfit=False):
 
@@ -40,13 +39,10 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	# Make sure the output dir exists
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
-	# retrieve data and create splits
-	train_full = trec_dataset(train=True, fine_grained=False)
-	label_to_idx = {k: ix for ix, k in enumerate(set([doc['label'] for doc in train_full]))}
 
 	# convert to dataframes
-	train_df = trec_to_df(True, label_to_idx)
-	test_df = trec_to_df(False, label_to_idx)
+	train_df, label_to_idx = trec_to_df(True)
+	test_df, label_to_idx = trec_to_df(False, label_to_idx)
 
 	# split and process data to Documents
 	df_to_docs(train_df, label_to_idx, out_dir, do_split=True, dev_percentage=1 - percentage_train, store_df=True,

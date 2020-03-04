@@ -57,9 +57,6 @@ def df_to_docs(df, label_to_idx, out_dir, do_split, dev_percentage, store_df, se
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 
-	# df = df.applymap(lambda x: x.encode('unicode_escape').
-	# 				   decode('utf-8') if isinstance(x, str) else x)
-
 	idx_to_label = {v:k for k,v in label_to_idx.items()}
 	target_cols = [col for col in df.columns if target_prefix in col]
 
@@ -92,7 +89,7 @@ def df_to_docs(df, label_to_idx, out_dir, do_split, dev_percentage, store_df, se
 						 tags=[idx_to_label[int(t)] for t in np.argwhere(row[target_cols].values == 1)],
 						 restructure_doc=restructure_doc,
 						 split_size_long_seqs=max_seq_len)
-				for ix, row in tqdm(df.iterrows())]
+				for ix, row in tqdm(df.iterrows(), desc='Converting to docs')]
 
 		with open(os.path.join(out_dir, name + '.pkl'), 'wb') as f:
 			pickle.dump(docs, f)
