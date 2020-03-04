@@ -213,8 +213,8 @@ class MultiLabelTextClassifier:
 		if binary_class:
 			# Initialize training attributes
 			if 'caps' in self.model_name.lower():
-				self.criterion = FocalLoss()
-				# self.criterion = torch.nn.BCELoss()
+				# self.criterion = FocalLoss()
+				self.criterion = torch.nn.BCELoss()
 			else:
 				if pos_weight:
 					pos_weight = torch.tensor(pos_weight).to(self.device)
@@ -224,9 +224,6 @@ class MultiLabelTextClassifier:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
 			else:
 				self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
-
-
-
 
 		# Load embeddings
 		if word_encoder.lower() != 'ulmfit':
@@ -478,7 +475,7 @@ class MultiLabelTextClassifier:
 
 		avg_loss = eval_loss / len(dataloader)
 
-		hamming, emr, f1_micro, f1_macro = accuracy(y_true, y_pred, False, self.binary_class)
+		hamming, emr, f1_micro, f1_macro, roc_auc_micro = accuracy(y_true, y_pred, False, self.binary_class)
 
 		if write_path is not None:
 			write_classification_report(write_path, y_pred, y_true, self.label_to_idx, False, self.binary_class) #TODO: remove hard-coded stuff

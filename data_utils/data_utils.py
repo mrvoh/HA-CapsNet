@@ -2,7 +2,7 @@
 from torchnlp.datasets import Dataset
 from torchnlp.samplers import BucketBatchSampler
 from torchnlp.encoders.text import stack_and_pad_tensors, pad_tensor
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SequentialSampler
 import torch
 # import nltk
 import numpy as np
@@ -246,12 +246,15 @@ def collate_fn_transformer(batch): #multigpu implementation
 
 
 # Get dataloader
-def get_data_loader(data, batch_size, drop_last, use_rnn):
+def get_data_loader(data, batch_size, drop_last, use_rnn, is_train=False):
 
+	# if is_train:
 	sampler = BucketBatchSampler(data,
 								 batch_size,
 								 drop_last=drop_last,
 								 sort_key=lambda row: -len(row['sents']))
+	# else:
+	# 	sampler = SequentialSampler(data)
 
 	collate_fn = collate_fn_rnn if use_rnn else collate_fn_transformer
 

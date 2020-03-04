@@ -34,7 +34,7 @@ def main(use_prog_bar=True):
 	#########################################################################################
 
 	args, parser = get_parser()
-
+	print(args)
 	use_rnn = args.word_encoder == 'gru'
 	train_path, dev_path, test_path = (args.train_path, args.dev_path, args.test_path)
 	label_to_idx_path = args.label_to_idx_path
@@ -138,16 +138,17 @@ def main(use_prog_bar=True):
 		#TODO: more efficient?
 		encoder = ULMFiTEncoder(args.ulmfit_pretrained_path, len(word_to_idx), args.dropout_factor)
 		encoder.eval()
-		for p in [train_path, dev_path, test_path]:
-			with open(p, 'rb') as f:
-				docs = pickle.load(f)
-			# set the encoding for all docs
-			[doc.set_encoding(encoder.encode(torch.LongTensor(
-				[word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(
-				0)).detach().numpy()) for doc in tqdm.tqdm(docs)]
+		with torch.no_grad():
+			for p in [train_path, dev_path, test_path]:
+				with open(p, 'rb') as f:
+					docs = pickle.load(f)
+				# set the encoding for all docs
+				[doc.set_encoding(encoder.encode(torch.LongTensor(
+					[word_to_idx.get(tok, word_to_idx[unk]) for sen in doc.sentences for tok in sen]).unsqueeze(
+					0)).detach().numpy()) for doc in tqdm.tqdm(docs)]
 
-			with open(p, 'wb') as f:
-				pickle.dump(docs, f)
+				with open(p, 'wb') as f:
+					pickle.dump(docs, f)
 
 	if args.create_wordvecs:  # Create word vectors from train documents
 		print('Creating word vectors')
@@ -207,7 +208,7 @@ def main(use_prog_bar=True):
 		# Fix for when not all labels are present in train set
 		if len(pos_weight) != len(label_to_idx):
 			pos_weight = None
-		dataloader_train = get_data_loader(train_dataset, args.train_batch_size, True, use_rnn)
+		dataloader_train = get_data_loader(train_dataset, args.train_batch_size, True, use_rnn, is_train=True)
 
 		# Save word_mapping
 		with open(args.word_to_idx_path, 'w') as f:
@@ -221,7 +222,7 @@ def main(use_prog_bar=True):
 																	label_to_idx=label_to_idx, min_freq_word=None,
 																	unk=unk, pad=pad, label_value = args.label_value,
 																	binary_class=args.binary_class)
-		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, True, use_rnn)
+		dataloader_dev = get_data_loader(dev_dataset, args.eval_batch_size, True, use_rnn, is_train=False)
 		# Free some memory
 		del dev_dataset
 		del dev_docs
@@ -280,7 +281,7 @@ def main(use_prog_bar=True):
 													   label_value = args.label_value,
 													   binary_class=args.binary_class)
 
-		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn)
+		dataloader_test = get_data_loader(test_dataset, args.eval_batch_size, True, use_rnn, is_train=False)
 
 		return TextClassifier.eval_dataset(dataloader_test)
 
