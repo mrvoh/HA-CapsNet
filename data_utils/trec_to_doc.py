@@ -11,7 +11,7 @@ from data_utils.csv_to_documents import df_to_docs
 
 def trec_to_df(is_train, label_to_idx):
 
-	dset = trec_dataset(train=is_train, fine_grained=False, test=not is_train)
+	dset = trec_dataset(train=is_train, fine_grained=True, test=not is_train)
 
 	# create one hot encoding of labels
 	num_labels = len(label_to_idx)
@@ -41,7 +41,7 @@ def parse(out_dir, percentage_train, restructure_doc = True, max_seq_len = 50, u
 	if not os.path.exists(out_dir):
 		os.makedirs(out_dir)
 	# retrieve data and create splits
-	train_full = trec_dataset(train=True, fine_grained=False)
+	train_full = trec_dataset(train=True, fine_grained=True)
 	label_to_idx = {k: ix for ix, k in enumerate(set([doc['label'] for doc in train_full]))}
 
 	# convert to dataframes
