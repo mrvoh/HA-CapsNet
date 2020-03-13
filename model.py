@@ -244,8 +244,8 @@ class HCapsNet(nn.Module):
         poses, activations = self.caps_classifier(doc_encoding)
         activations = activations.squeeze(2)
 
-        if not self.binary_class: # convert probs to log probs for compatibility with CE
-            activations = torch.log(activations/(1-activations))
+        # if not self.binary_class: # convert probs to log probs for compatibility with CE
+        #     activations = torch.log(activations/(1-activations))
 
         if encoding is None:
             return activations, word_attn_weight, sent_attn_weight, 0
@@ -303,7 +303,7 @@ class HCapsNetMultiHeadAtt(nn.Module):
         params.update(
             {
                 "model_name":"HCapsNetMultiHeadAtt",
-                "nhead_doc":self.caps_classifier.in_channels,
+                "nhead_doc":self.caps_classifier.input_size,
                 "num_caps":self.caps_classifier.num_caps,
                 "lambda_reg_caps":self.lambda_reg_caps,
                 "dim_caps":self.caps_classifier.dim_caps,
