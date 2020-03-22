@@ -195,7 +195,7 @@ class TextClassificationLearner:
             model = HCapsNet(
                 num_tokens=num_tokens, num_classes=num_classes, **params_no_weight
             )
-        elif params["model_name"].lower() == "hierarchicalattentioncapsnet":
+        elif params["model_name"].lower() == "hierarchicalattentioncapsnet" or params["model_name"].lower() == "hcapsnetmultiheadatt":
             model = HierarchicalAttentionCapsNet(
                 num_tokens=num_tokens, num_classes=num_classes, **params_no_weight
             )
@@ -296,13 +296,12 @@ class TextClassificationLearner:
                 binary_class=binary_class,
                 KDE_epsilon=KDE_epsilon,
             )
-        elif self.model_name.lower() == "hcapsnetmultiheadatt":
+        elif self.model_name.lower() == "HierarchicalAttentionCapsNet".lower():
             self.model = HierarchicalAttentionCapsNet(
-                self.vocab_size,
-                embed_dim,
-                word_hidden,
-                sent_hidden,
-                self.num_labels,
+                num_tokens=self.vocab_size,
+                embed_size=embed_dim,
+                word_hidden=word_hidden,
+                num_classes=self.num_labels,
                 dropout=dropout,
                 word_encoder=word_encoder,
                 sent_encoder=sent_encoder,
@@ -559,7 +558,7 @@ class TextClassificationLearner:
             else:
                 loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             optimizer.step()
             if use_prog_bar:
                 prog.update(

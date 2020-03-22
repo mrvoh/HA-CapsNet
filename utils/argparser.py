@@ -69,7 +69,6 @@ def get_parser():
     parser.add_argument(
         "--eval_every",
         required=True,
-        type=int,
         help="Nr of training updates before evaluating model",
     )
     parser.add_argument(

@@ -161,7 +161,7 @@ def main(use_prog_bar=True):
                 restructure_doc=args.restructure_docs,
                 max_seq_len=args.max_seq_len,
             )
-        elif args.dataset_name.lower() == "20news":
+        elif args.dataset_name.lower() in ["20news", "twentynews"]:
             twenty_news_parse(
                 args.write_data_dir,
                 args.percentage_train,
@@ -202,7 +202,7 @@ def main(use_prog_bar=True):
         )
         encoder.eval()
         with torch.no_grad():
-            for p in [train_path, dev_path, test_path]:
+            for p in [dev_path, test_path, train_path]:
                 with open(p, "rb") as f:
                     docs = pickle.load(f)
                 # set the encoding for all docs
@@ -386,13 +386,15 @@ def main(use_prog_bar=True):
                 lr_div_factor=args.lr_div_factor,
             )
 
+        eval_every = len(dataloader_train) if args.eval_every == 'epoch' else args.eval_every
+
         # Train
         TextClassifier.train(
             dataloader_train,
             dataloader_dev,
             pos_weight,
             num_epochs=args.num_train_epochs,
-            eval_every=args.eval_every,
+            eval_every=eval_every,
             use_prog_bar=use_prog_bar,
         )
 

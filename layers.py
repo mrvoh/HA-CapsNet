@@ -87,10 +87,10 @@ class ULMFiTEncoder(nn.Module):
 			"pad_token": 1,
 			"qrnn": False,
 			"bidir": False,
-			"hidden_p": 0.15,
-			"input_p": 0.25,
-			"embed_p": 0.02,
-			"weight_p": 0.2,
+			"hidden_p": 0.15 * dropout_factor,
+			"input_p": 0.25 * dropout_factor,
+			"embed_p": 0.02 * dropout_factor,
+			"weight_p": 0.2 * dropout_factor,
 		}
 		config["vocab_sz"] = num_tokens
 

@@ -491,7 +491,7 @@ class HierarchicalAttentionCapsNet(nn.Module):
 
         params.update(
             {
-                "model_name": "HCapsNetMultiHeadAtt",
+                "model_name": "HierarchicalAttentionCapsNet",
                 "nhead_doc": self.caps_classifier.input_size,
                 "num_caps": self.caps_classifier.num_caps,
                 "lambda_reg_caps": self.lambda_reg_caps,

@@ -37,9 +37,7 @@ def set_params(params, config_path):
     for param in [
         "num_compressed_caps",
         "min_freq_word",
-        "sent_hidden",
-        "num_cycles_lr",
-        "num_head_doc"
+        "num_cycles_lr"
     ]:
         params[param] = int(params[param])
     # reads in config file and overwrites params for optimization
@@ -114,14 +112,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--max_evals", default=50, type=int, help="Total nr of optimization steps."
+        "--max_evals", default=40, type=int, help="Total nr of optimization steps."
     )
     parser.add_argument(
         "--K", default=2, type=int, help="Number of splits for cross validation"
     )
     parser.add_argument(
         "--preload_trials",
-        action="store_false",
+        action="store_true",
         help="Whether to preload an existing trials object.",
     )
     parser.add_argument(
@@ -193,19 +191,20 @@ if __name__ == "__main__":
     label_to_idx_path = args.label_to_idx_path
 
     sys.argv = [sys.argv[0]]  # to untangle command lind arguments of hyper_opt and main
-
+    os.rename(config_path, 'parameters.ini')
+    config_path = 'parameters.ini'
     ###########################################
     # define search space
     space = {
         "dropout": hp.uniform("dropout", 0.25, 0.75),
         "dropout_caps": hp.uniform("dropout_caps", 0.0, 0.4),
-        "lambda_reg_caps": hp.loguniform("lambda_reg_caps", np.log(1e-7), np.log(1e-3)),
+        "lambda_reg_caps": hp.loguniform("lambda_reg_caps", np.log(1e-7), np.log(0.5)),
         "dropout_factor": hp.uniform("dropout_factor", 1.0, 3.0),
         "num_compressed_caps": hp.quniform("num_compressed_caps", 5, 60, 5),
         "min_freq_word": hp.quniform("min_freq_word", 1, 50, 1),
         "num_cycles_lr": hp.quniform("num_cycles_lr", 1, 10, 1),
         "lr_div_factor": hp.uniform("lr_div_factor", 1, 20),
-        "num_head_doc":hp.quniform("num_head_doc", 1, 5, 1)
+        # "num_head_doc":hp.quniform("num_head_doc", 1, 5, 1)
     }
 
     # Create Trials object to log the performance

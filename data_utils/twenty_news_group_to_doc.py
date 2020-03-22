@@ -35,6 +35,11 @@ def twentynews_to_df(is_train, label_to_idx=None, filter=False):
 
     df[label_cols] = all_labels
 
+    if is_train:
+        df['len'] = df.text.apply(lambda x: len(x.split(' ')))
+        df = df[df.len < 5000]
+        df = df.drop(columns=['len'])
+
     return df, label_to_idx
 
 
