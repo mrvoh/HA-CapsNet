@@ -1,4 +1,3 @@
-
 """
 Exports a pytorch model to an ONNX format, and then converts from the
 ONNX to a Tensorflow serving protobuf file.
@@ -21,14 +20,13 @@ from onnx_tf.backend import prepare
 import onnx
 import torch
 
-from text_class_learner import MultiLabelTextClassifier
+from text_class_learner import TextClassificationLearner
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def export_onnx(model, dummy_input, file, input_names, output_names,
-                num_inputs):
+def export_onnx(model, dummy_input, file, input_names, output_names, num_inputs):
     """
     Converts a Pytorch model to the ONNX format and saves the .onnx model file.
     The first dimension of the input nodes are of size N, where N is the
@@ -52,8 +50,13 @@ def export_onnx(model, dummy_input, file, input_names, output_names,
     # List of onnx.export function arguments:
     # https://github.com/pytorch/pytorch/blob/master/torch/onnx/utils.py
     # ISSUE: https://github.com/pytorch/pytorch/issues/14698
-    torch.onnx.export(model, args=dummy_input, input_names=input_names,
-                      output_names=output_names, f=file)
+    torch.onnx.export(
+        model,
+        args=dummy_input,
+        input_names=input_names,
+        output_names=output_names,
+        f=file,
+    )
 
     # Reload model to fix the batch size
     model = onnx.load(file)
@@ -74,8 +77,7 @@ def make_variable_batch_size(num_inputs, onnx_model):
     :return: ONNX model instance with variable input batch size
     """
     for i in range(num_inputs):
-        onnx_model.graph.input[i].type.tensor_type.\
-                                shape.dim[0].dim_param = 'batch_size'
+        onnx_model.graph.input[i].type.tensor_type.shape.dim[0].dim_param = "batch_size"
     return onnx_model
 
 
@@ -128,21 +130,28 @@ def export_for_serving(meta_path, export_dir, input_tensors, output_tensors):
         # TF will prepend an `import` scope name on all operations
         tf.import_graph_def(graph_def, name="")
 
-        tensor_info_inputs = {name: smutils.build_tensor_info(in_tensor)
-                              for name, in_tensor in input_tensors.items()}
+        tensor_info_inputs = {
+            name: smutils.build_tensor_info(in_tensor)
+            for name, in_tensor in input_tensors.items()
+        }
 
-        tensor_info_outputs = {name: smutils.build_tensor_info(out_tensor)
-                               for name, out_tensor in output_tensors.items()}
+        tensor_info_outputs = {
+            name: smutils.build_tensor_info(out_tensor)
+            for name, out_tensor in output_tensors.items()
+        }
 
         prediction_signature = signature_def_utils.build_signature_def(
             inputs=tensor_info_inputs,
             outputs=tensor_info_outputs,
-            method_name=signature_constants.PREDICT_METHOD_NAME)
+            method_name=signature_constants.PREDICT_METHOD_NAME,
+        )
 
         builder = tf.saved_model.builder.SavedModelBuilder(export_dir)
         builder.add_meta_graph_and_variables(
-            sess, [tag_constants.SERVING],
-            signature_def_map={"predict_images": prediction_signature})
+            sess,
+            [tag_constants.SERVING],
+            signature_def_map={"predict_images": prediction_signature},
+        )
         builder.save()
 
         log.info("Input info:\n{}".format(tensor_info_inputs))
@@ -152,17 +161,19 @@ def export_for_serving(meta_path, export_dir, input_tensors, output_tensors):
 def main(args):
 
     # Initialize pytorch model
-    learner = MultiLabelTextClassifier.load(args.pretrained_path)
+    learner = TextClassificationLearner.load(args.pretrained_path)
 
     model = learner.model
 
     n_docs = 5
     n_sents = 7
     sents_len = 100
-    sents = torch.ones(n_docs, n_sents, sents_len, dtype=torch.long) #TODO: variable seq len?
+    sents = torch.ones(
+        n_docs, n_sents, sents_len, dtype=torch.long
+    )  # TODO: variable seq len?
 
     dummy_inputs = sents
-    input_names = 'sents'
+    input_names = "sents"
     # img_input = torch.randn(1, 3, 224, 224)
 
     # input_names = ['input_img']
@@ -170,37 +181,46 @@ def main(args):
 
     # Use a tuple if there are multiple model inputs
     # dummy_inputs = (img_input)
-    output_names = ('activations', 'word_attn_weight', 'sent_attn_weight', 'rec_loss')
+    output_names = ("activations", "word_attn_weight", "sent_attn_weight", "rec_loss")
 
-    export_onnx(model, dummy_inputs, args.onnx_file,
-                input_names=input_names,
-                output_names=output_names,
-                num_inputs=1)
-    input_tensors, output_tensors = export_tf_proto(args.onnx_file,
-                                                    args.meta_file)
-    export_for_serving(args.meta_file, args.export_dir, input_tensors,
-                       output_tensors)
+    export_onnx(
+        model,
+        dummy_inputs,
+        args.onnx_file,
+        input_names=input_names,
+        output_names=output_names,
+        num_inputs=1,
+    )
+    input_tensors, output_tensors = export_tf_proto(args.onnx_file, args.meta_file)
+    export_for_serving(args.meta_file, args.export_dir, input_tensors, output_tensors)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--pretrained_path', help="Path to model to export.", type=str,
-        default='models/HCapsNet.pt')
-    parser.add_argument(
-        '--onnx-file', help="File where to export the ONNX file", type=str,
-        default='tmp_onnx.onnx')
-    parser.add_argument(
-        '--meta-file', help="File where to export the Tensorflow meta file",
+        "--pretrained_path",
+        help="Path to model to export.",
         type=str,
-        default='tf_meta.meta')
+        default="models/HCapsNet.pt",
+    )
     parser.add_argument(
-        '--export-dir',
+        "--onnx-file",
+        help="File where to export the ONNX file",
+        type=str,
+        default="tmp_onnx.onnx",
+    )
+    parser.add_argument(
+        "--meta-file",
+        help="File where to export the Tensorflow meta file",
+        type=str,
+        default="tf_meta.meta",
+    )
+    parser.add_argument(
+        "--export-dir",
         help="Folder where to export proto models for TF serving",
         type=str,
-        default='deployment')
+        default="deployment",
+    )
 
     args = parser.parse_args()
     main(args)
-
-

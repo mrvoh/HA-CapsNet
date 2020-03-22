@@ -1,11 +1,11 @@
 from torch import nn
 import torch
 
+
 class CategoricalCrossEntropyWithSoftmax(nn.Module):
     def __init__(self):
         super(CategoricalCrossEntropyWithSoftmax, self).__init__()
         self.log_softmax = nn.Softmax(dim=1)
-
 
     def forward(self, input, target):
         # convert to OHE

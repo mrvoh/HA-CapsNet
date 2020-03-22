@@ -6,13 +6,17 @@ import numpy as np
 import copy
 from torchnlp.encoders.text import stack_and_pad_tensors
 from fastai.text import *
+
 # from fastai
 
+
 def chunker(seq, size):
-	return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+	return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
 
 def _get_clones(module, N):
 	return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
 
 class TransformerEncoder(nn.Module):
 	r"""TransformerEncoder is a stack of N encoder layers
@@ -27,7 +31,9 @@ class TransformerEncoder(nn.Module):
 		>>> transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
 	"""
 
-	def __init__(self, emb_dim, hidden_dim, encoder_layer, num_layers, norm=None, dropout = 0.1):
+	def __init__(
+			self, emb_dim, hidden_dim, encoder_layer, num_layers, norm=None, dropout=0.1
+	):
 		super(TransformerEncoder, self).__init__()
 		self.layers = _get_clones(encoder_layer, num_layers)
 		self.num_layers = num_layers
@@ -51,13 +57,13 @@ class TransformerEncoder(nn.Module):
 			see the docs in Transformer class.
 		"""
 
-
 		output = F.relu(self.emb_to_hidden(src))
 		output = self.norm1(self.drop(output))
 
 		for i in range(self.num_layers):
-			output = self.layers[i](output, src_mask=mask,
-									src_key_padding_mask=src_key_padding_mask)
+			output = self.layers[i](
+				output, src_mask=mask, src_key_padding_mask=src_key_padding_mask
+			)
 
 		if self.norm:
 			output = self.norm(output)
@@ -69,64 +75,86 @@ class TransformerEncoder(nn.Module):
 # HIERARCHICAL DOC ENCODING LAYERS
 ###################################################################################################
 
+
 class ULMFiTEncoder(nn.Module):
 	def __init__(self, pretrained_path, num_tokens, dropout_factor):
 		super(ULMFiTEncoder, self).__init__()
 		# state_dict = torch.loa
-		config = {'emb_sz': 400, 'n_hid': 1150, 'n_layers': 3, 'pad_token': 1, 'qrnn': False, 'bidir': False, 'hidden_p': 0.15, 'input_p': 0.25, 'embed_p': 0.02, 'weight_p': 0.2}
-		config['vocab_sz'] = num_tokens
+		config = {
+			"emb_sz": 400,
+			"n_hid": 1150,
+			"n_layers": 3,
+			"pad_token": 1,
+			"qrnn": False,
+			"bidir": False,
+			"hidden_p": 0.15 * dropout_factor,
+			"input_p": 0.25 * dropout_factor,
+			"embed_p": 0.02 * dropout_factor,
+			"weight_p": 0.2 * dropout_factor,
+		}
+		config["vocab_sz"] = num_tokens
 
 		lm = AWD_LSTM(**config)
-		#TODO: save config in state_dict when finetuning
+		# TODO: save config in state_dict when finetuning
 
 		sd = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
 		lm.load_state_dict(sd)
 
-		self.ln = nn.LayerNorm(config['emb_sz'])
+		self.ln = nn.LayerNorm(config["emb_sz"])
 		self.ulmfit = lm
 
 		self.layer_map = stop_map = {
-			0:10, # lstm layer 3
-			1:8, # lstm layer 2
-			2:6, # lstm layer 1
-			3:0 # all
+			0: 10,  # lstm layer 3
+			1: 8,  # lstm layer 2
+			2: 6,  # lstm layer 1
+			3: 0,  # all
 		}
 
 	def get_layer_params(self, l):
 
 		assert 0 <= l <= 3, "Ulmfit consists of only 4 layers, choose l between 0 and 3"
 		assert isinstance(l, int), "Please give an integer value for l"
-		#TODO: return all params of layer l such that specific lr can be set
+		# TODO: return all params of layer l such that specific lr can be set
 
 		all_modules = list(self.ulmfit.modules())
-		all_modules.pop(0) # remove AWD LSTM container
+		all_modules.pop(0)  # remove AWD LSTM container
 		all_modules.pop(2)  # remove LSTM Module List
 
 		if l == 0:
-			params = [mod.parameters(recurse=False) for mod in all_modules[self.layer_map[l]:]]
+			params = [
+				mod.parameters(recurse=False)
+				for mod in all_modules[self.layer_map[l] :]
+			]
 		else:
-			params = [mod.parameters(recurse=False) for mod in all_modules[self.layer_map[l]:self.layer_map[l-1]]]
+			params = [
+				mod.parameters(recurse=False)
+				for mod in all_modules[self.layer_map[l] : self.layer_map[l - 1]]
+			]
 
 		params = [p for mod in params for p in mod]
 
-		other_params  = [mod.parameters(recurse=False) for mod in all_modules[:self.layer_map[l]]]
+		other_params = [
+			mod.parameters(recurse=False) for mod in all_modules[: self.layer_map[l]]
+		]
 		other_params = [p for mod in other_params for p in mod]
-		p = [param for param in params if not any([param.equal(p) for p in other_params])]
+		p = [
+			param for param in params if not any([param.equal(p) for p in other_params])
+		]
 		return p
 
 	def freeze_to(self, l):
 		# when l < 0 everything will be unfrozen
 		stop_map = {
-			-1:10**6,
-			0:10, # lstm layer 3
-			1:8, # lstm layer 2
-			2:6, # lstm layer 1
-			3:-1 # all
+			-1: 10 ** 6,
+			0: 10,  # lstm layer 3
+			1: 8,  # lstm layer 2
+			2: 6,  # lstm layer 1
+			3: -1,  # all
 		}
 
 		for i, mod in enumerate(self.ulmfit.modules()):
 			for param in mod.parameters():
-				try: # hacky way to work around FastAI modules
+				try:  # hacky way to work around FastAI modules
 					param.requires_grad = i > stop_map[l]
 				except:
 					continue
@@ -134,7 +162,7 @@ class ULMFiTEncoder(nn.Module):
 	def encode(self, x):
 		# Encodes a str as a concatenation of the mean and max pooling of the final hidden state over the whole sequence
 
-		self.ulmfit.reset() # since an internal state is kept
+		self.ulmfit.reset()  # since an internal state is kept
 		h, c = self.ulmfit(x)
 
 		mean_pool = h[-1].mean(dim=1)
@@ -147,17 +175,30 @@ class ULMFiTEncoder(nn.Module):
 		# manually reset the hidden states
 		self.ulmfit.reset()
 
-		h, c = self.ulmfit(x) 
+		h, c = self.ulmfit(x)
 
-		x1 = h[-1] # final hidden state
+		x1 = h[-1]  # final hidden state
 
 		x1 = self.ln(x1)
 
 		return x1
 
+
 class AttentionWordEncoder(nn.Module):
-	def __init__(self, encoder_type, num_tokens, embed_size, word_hidden, bidirectional= True, dropout=0.1,
-				 num_layers = 1, nhead = 4, use_bert = False, ulmfit_pretrained_path = None, dropout_factor_ulmfit = 1.0):
+	def __init__(
+			self,
+			encoder_type,
+			num_tokens,
+			embed_size,
+			word_hidden,
+			bidirectional=True,
+			dropout=0.1,
+			num_layers=1,
+			nhead=4,
+			use_bert=False,
+			ulmfit_pretrained_path=None,
+			dropout_factor_ulmfit=1.0,
+	):
 
 		super(AttentionWordEncoder, self).__init__()
 		self.num_tokens = num_tokens
@@ -173,18 +214,26 @@ class AttentionWordEncoder(nn.Module):
 		self.bidirectional = bidirectional
 		self.dropout_factor_ulmfit = dropout_factor_ulmfit
 
-		if encoder_type.lower() == 'gru':
-			word_out = 2* word_hidden if bidirectional else word_hidden
-			self.word_encoder = nn.GRU(embed_size, word_hidden, bidirectional=bidirectional)
-		elif encoder_type.lower() == 'transformer':
+		if encoder_type.lower() == "gru":
+			word_out = 2 * word_hidden if bidirectional else word_hidden
+			self.word_encoder = nn.GRU(
+				embed_size, word_hidden, bidirectional=bidirectional
+			)
+		elif encoder_type.lower() == "transformer":
 			# TEST
 			# encoder_layer = TransformerCapsEncoderLayer(word_hidden, 1, 2 * word_hidden, dropout)
-			encoder_layer = nn.TransformerEncoderLayer(word_hidden, nhead, 2*word_hidden, dropout)
-			self.word_encoder = TransformerEncoder(embed_size, word_hidden, encoder_layer, num_layers)
+			encoder_layer = nn.TransformerEncoderLayer(
+				word_hidden, nhead, 2 * word_hidden, dropout
+			)
+			self.word_encoder = TransformerEncoder(
+				embed_size, word_hidden, encoder_layer, num_layers
+			)
 
 			word_out = word_hidden
-		elif encoder_type.lower() == 'ulmfit':
-			self.word_encoder = ULMFiTEncoder(ulmfit_pretrained_path, num_tokens, dropout_factor_ulmfit)
+		elif encoder_type.lower() == "ulmfit":
+			self.word_encoder = ULMFiTEncoder(
+				ulmfit_pretrained_path, num_tokens, dropout_factor_ulmfit
+			)
 			word_out = 400
 
 		self.weight_W_word = nn.Linear(word_out, word_out)
@@ -192,21 +241,21 @@ class AttentionWordEncoder(nn.Module):
 		torch.nn.init.xavier_normal_(self.weight_W_word.weight)
 		torch.nn.init.xavier_normal_(self.weight_proj_word)
 
-		self.seq_dim = 0 if self.encoder_type.lower() == 'gru' else 1
+		self.seq_dim = 0 if self.encoder_type.lower() == "gru" else 1
 		self.softmax_word = nn.Softmax(dim=self.seq_dim)
 		self.drop1 = nn.Dropout(dropout)
 		self.drop2 = nn.Dropout(dropout)
 
 	def forward(self, x):
 
-		if self.encoder_type.lower() == 'ulmfit': # ULMFit flow
+		if self.encoder_type.lower() == "ulmfit":  # ULMFit flow
 			x1 = self.word_encoder(x)
-		else: # Regular word embeddings flow
+		else:  # Regular word embeddings flow
 			x_emb = self.lookup(x)
 
-			if self.encoder_type.lower() == 'gru':
-				x1, _ = self.word_encoder(self.drop1(x_emb.permute(1,0,2)))
-			elif self.encoder_type.lower() == 'transformer':
+			if self.encoder_type.lower() == "gru":
+				x1, _ = self.word_encoder(self.drop1(x_emb.permute(1, 0, 2)))
+			elif self.encoder_type.lower() == "transformer":
 				x1 = self.word_encoder(self.drop1(x_emb))
 
 		# compute attention
@@ -221,31 +270,36 @@ class AttentionWordEncoder(nn.Module):
 
 		return sen_encoding, word_attn_norm
 
-
 	def get_init_params(self):
 
 		params = {
-		'embed_size':self.embed_size,
-		'word_hidden':self.word_hidden,
-		'dropout':self.dropout,
-		'embed_size':self.embed_size,
-		'word_encoder':self.encoder_type,
-		'use_bert':self.use_bert,
-		'ulmfit_pretrained_path':self.ulmfit_pretrained_path,
-		'ulmfit_dropout_factor':self.dropout_factor_ulmfit,
-		'num_layers_word':self.num_layers,
-		'nhead_word':self.nhead,
-		'bidirectional':self.bidirectional
+			"embed_size": self.embed_size,
+			"word_hidden": self.word_hidden,
+			"dropout": self.dropout,
+			"embed_size": self.embed_size,
+			"word_encoder": self.encoder_type,
+			"use_bert": self.use_bert,
+			"ulmfit_pretrained_path": self.ulmfit_pretrained_path,
+			"ulmfit_dropout_factor": self.dropout_factor_ulmfit,
+			"num_layers_word": self.num_layers,
+			"nhead_word": self.nhead,
+			"bidirectional": self.bidirectional,
 		}
 
 		return params
 
 
-
 class AttentionSentEncoder(nn.Module):
-
-	def __init__(self, encoder_type, sent_hidden, word_out, bidirectional=True,
-				 num_layers=1, nhead=4, dropout=0.1):
+	def __init__(
+			self,
+			encoder_type,
+			sent_hidden,
+			word_out,
+			bidirectional=True,
+			num_layers=1,
+			nhead=4,
+			dropout=0.1,
+	):
 
 		super(AttentionSentEncoder, self).__init__()
 
@@ -257,13 +311,17 @@ class AttentionSentEncoder(nn.Module):
 		self.nhead = nhead
 		self.dropout = dropout
 
-		if encoder_type.lower() == 'gru':
+		if encoder_type.lower() == "gru":
 			self.bidirectional = bidirectional
 			# word_out = 2 * word_hidden if bidirectional else word_hidden
 			sent_out = 2 * sent_hidden if bidirectional else sent_hidden
-			self.sent_encoder = nn.GRU(word_out, sent_hidden, bidirectional=bidirectional)
-		elif encoder_type.lower() == 'transformer':
-			encoder_layer = nn.TransformerEncoderLayer(word_out, nhead, sent_hidden, dropout)
+			self.sent_encoder = nn.GRU(
+				word_out, sent_hidden, bidirectional=bidirectional
+			)
+		elif encoder_type.lower() == "transformer":
+			encoder_layer = nn.TransformerEncoderLayer(
+				word_out, nhead, sent_hidden, dropout
+			)
 			# TEST
 			# encoder_layer = TransformerCapsEncoderLayer(word_out, sent_hidden, nhead, sent_hidden, dropout)
 			self.sent_encoder = nn.TransformerEncoder(encoder_layer, num_layers)
@@ -282,10 +340,10 @@ class AttentionSentEncoder(nn.Module):
 	def forward(self, x):
 
 		# word level gru
-		if self.encoder_type.lower() == 'gru':
-			x, _ = self.sent_encoder(self.drop1(x.permute(1,0,2)))
-			x = x.permute(1,0,2)
-		elif self.encoder_type.lower() == 'transformer':
+		if self.encoder_type.lower() == "gru":
+			x, _ = self.sent_encoder(self.drop1(x.permute(1, 0, 2)))
+			x = x.permute(1, 0, 2)
+		elif self.encoder_type.lower() == "transformer":
 			x = self.sent_encoder(x)
 
 		# compute attention
@@ -300,12 +358,12 @@ class AttentionSentEncoder(nn.Module):
 	def get_init_params(self):
 
 		params = {
-			'sent_hidden':self.sent_hidden,
-			'dropout':self.dropout,
-			'sent_encoder':self.encoder_type,
-			'num_layers_sen':self.num_layers,
-			'nhead_sen':self.nhead,
-			'bidirectional':self.bidirectional
+			"sent_hidden": self.sent_hidden,
+			"dropout": self.dropout,
+			"sent_encoder": self.encoder_type,
+			"num_layers_sen": self.num_layers,
+			"nhead_sen": self.nhead,
+			"bidirectional": self.bidirectional,
 		}
 
 		return params
@@ -316,7 +374,15 @@ class GRUMultiHeadAtt(nn.Module):
 	GRU with LabelWise Attention Network
 	"""
 
-	def __init__(self, sent_hidden, word_out, nhead_doc, bidirectional=True, dropout=0.1, aggregate_output = True):
+	def __init__(
+			self,
+			sent_hidden,
+			word_out,
+			nhead_doc,
+			bidirectional=True,
+			dropout=0.1,
+			aggregate_output=True,
+	):
 		super(GRUMultiHeadAtt, self).__init__()
 
 		# self.batch_size = batch_size
@@ -335,7 +401,6 @@ class GRUMultiHeadAtt(nn.Module):
 		self.U = nn.Linear(sent_gru_out, nhead_doc)
 		torch.nn.init.xavier_normal_(self.U.weight)
 
-
 		self.softmax_sent = nn.Softmax(dim=1)
 
 		# Regularization
@@ -351,27 +416,103 @@ class GRUMultiHeadAtt(nn.Module):
 	def get_init_params(self):
 
 		params = {
-		'sent_hidden':self.sent_hidden,
-		'dropout':self.dropout,
-		'sent_encoder':'gru',
-		'nhead_doc':self.nhead_doc,
-		'bidirectional':self.bidirectional
+			"sent_hidden": self.sent_hidden,
+			"dropout": self.dropout,
+			"sent_encoder": "gru",
+			"nhead_doc": self.nhead_doc,
+			"bidirectional": self.bidirectional,
 		}
 
 		return params
 
 	def forward(self, word_attention_vectors):
 
-		word_attention_vectors = self.drop1(self.bn1(word_attention_vectors.permute(0, 2, 1))).permute(0, 2, 1)
+		word_attention_vectors = self.drop1(
+		    self.bn1(word_attention_vectors.permute(0, 2, 1))
+		).permute(0, 2, 1)
 		output_sent, _ = self.sent_gru(word_attention_vectors)
+
+		output_sent = word_attention_vectors
 		B, N, d_c = output_sent.size()
 
 		H = output_sent.permute(1, 0, 2)
 		# Get labelwise attention scores per document
 		# A: [B, N, L] -> softmax-normalized scores per sentence per label
-		A = self.softmax_sent(self.U(
-			H) / self.score_normalizer)  # TODO: check performance when scores are discounted --> inspired by transformer
+		A = self.softmax_sent(
+			self.U(H) / self.score_normalizer
+		)  # TODO: check performance when scores are discounted --> inspired by transformer
 		# Get labelwise representations of doc
+		attention_expanded = torch.repeat_interleave(A, d_c, dim=2)
+		H_expanded = H.repeat(1, 1, self.nhead_doc)
+
+		V = (attention_expanded * H_expanded).view(N, B, self.nhead_doc, d_c).sum(dim=0)
+		if not self.aggregate_output:
+			return V, A
+		else:
+			V = self.drop2(self.bn2(V.permute(0, 2, 1))).permute(0, 2, 1)
+
+			y = V.mul(self.out)
+			y = y.sum(dim=2)
+
+			return y, A
+
+
+class MultiHeadSelfAttention(nn.Module):
+	""""
+	Multi head self attention block. Attends over all inputs in n_head subspaces and returns a softmax-normalized aggregation
+	The softmax-normalized aggregation is mapped to a vector representation if aggregate_output = True
+	"""
+
+	def __init__(
+			self,
+			input_dim,
+			nhead_doc,
+			dropout=0.1,
+			aggregate_output=True,
+	):
+		super(MultiHeadSelfAttention, self).__init__()
+
+		# self.batch_size = batch_size
+		self.input_dim = input_dim
+		self.nhead_doc = nhead_doc
+
+		self.dropout = dropout
+		self.aggregate_output = aggregate_output
+
+		self.score_normalizer = np.sqrt(input_dim) # inspired by Transformers
+
+		self.U = nn.Linear(input_dim, nhead_doc)
+		torch.nn.init.xavier_normal_(self.U.weight)
+
+		self.softmax_sent = nn.Softmax(dim=1)
+
+		# Regularization
+		self.drop1 = nn.Dropout(dropout)
+		if self.aggregate_output:
+			self.drop2 = nn.Dropout(dropout)
+
+			self.out = nn.Parameter(torch.Tensor(nhead_doc, input_dim))
+			torch.nn.init.xavier_normal_(self.out)
+
+	def get_init_params(self):
+
+		params = {
+			"dropout": self.dropout,
+			"nhead_doc": self.nhead_doc,
+		}
+
+		return params
+
+	def forward(self, x):
+
+		B, N, d_c = x.size()
+
+		H = x.permute(1, 0, 2)
+		# A: [B, N, L] -> softmax-normalized scores per sentence per label
+		A = self.softmax_sent(
+			self.U(H) / self.score_normalizer
+		)
+		# Attend over input and aggregate
 		attention_expanded = torch.repeat_interleave(A, d_c, dim=2)
 		H_expanded = H.repeat(1, 1, self.nhead_doc)
 
@@ -391,10 +532,12 @@ class GRUMultiHeadAtt(nn.Module):
 # CAPSNET LAYERS
 ###################################################################################################
 
+
 def squash_v1(x, axis):
 	s_squared_norm = (x ** 2).sum(axis, keepdim=True)
-	scale = torch.sqrt(s_squared_norm)/ (0.5 + s_squared_norm)
+	scale = torch.sqrt(s_squared_norm) / (0.5 + s_squared_norm)
 	return scale * x
+
 
 def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	num_iterations = 3
@@ -402,9 +545,9 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	for i in range(num_iterations):
 		if True:
 			leak = torch.zeros_like(b_ij).sum(dim=2, keepdim=True)
-			leaky_logits = torch.cat((leak, b_ij),2)
+			leaky_logits = torch.cat((leak, b_ij), 2)
 			leaky_routing = F.softmax(leaky_logits, dim=2)
-			c_ij = leaky_routing[:,:,1:,:].unsqueeze(4)
+			c_ij = leaky_routing[:, :, 1:, :].unsqueeze(4)
 		else:
 			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
 		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=3)
@@ -415,25 +558,26 @@ def dynamic_routing(batch_size, b_ij, u_hat, input_capsule_num):
 	activations = torch.sqrt((poses ** 2).sum(2))
 	return poses, activations
 
+
 def Adaptive_KDE_routing(batch_size, b_ij, u_hat, leaky_softmax=True, epsilon=0.05):
 	last_loss = 0.0
 	while True:
 		if leaky_softmax:
 			leak = torch.zeros_like(b_ij).sum(dim=2, keepdim=True)
-			leaky_logits = torch.cat((leak, b_ij),2)
+			leaky_logits = torch.cat((leak, b_ij), 2)
 			leaky_routing = F.softmax(leaky_logits, dim=2)
-			c_ij = leaky_routing[:,:,1:,:].unsqueeze(4)
+			c_ij = leaky_routing[:, :, 1:, :].unsqueeze(4)
 		else:
 			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
-		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
+		c_ij = c_ij / c_ij.sum(dim=1, keepdim=True)
 		v_j = squash_v1((c_ij * u_hat).sum(dim=1, keepdim=True), axis=3)
-		dd = 1 - ((squash_v1(u_hat, axis=3)-v_j)** 2).sum(3)
+		dd = 1 - ((squash_v1(u_hat, axis=3) - v_j) ** 2).sum(3)
 		b_ij = b_ij + dd
 
 		c_ij = c_ij.view(batch_size, c_ij.size(1), c_ij.size(2))
 		dd = dd.view(batch_size, dd.size(1), dd.size(2))
 
-		kde_loss = torch.mul(c_ij, dd).sum()/batch_size
+		kde_loss = torch.mul(c_ij, dd).sum() / batch_size
 		kde_loss = np.log(kde_loss.item())
 
 		if abs(kde_loss - last_loss) < epsilon:
@@ -450,18 +594,18 @@ def KDE_routing(batch_size, b_ij, u_hat):
 	for i in range(num_iterations):
 		if False:
 			leak = torch.zeros_like(b_ij).sum(dim=2, keepdim=True)
-			leaky_logits = torch.cat((leak, b_ij),2)
+			leaky_logits = torch.cat((leak, b_ij), 2)
 			leaky_routing = F.softmax(leaky_logits, dim=2)
-			c_ij = leaky_routing[:,:,1:,:].unsqueeze(4)
+			c_ij = leaky_routing[:, :, 1:, :].unsqueeze(4)
 		else:
 			c_ij = F.softmax(b_ij, dim=2).unsqueeze(4)
 
-		c_ij = c_ij/c_ij.sum(dim=1, keepdim=True)
+		c_ij = c_ij / c_ij.sum(dim=1, keepdim=True)
 		v_j = (c_ij * u_hat).sum(dim=1, keepdim=True)
 		v_j = squash_v1(v_j, axis=3)
 
 		if i < num_iterations - 1:
-			dd = 1 - ((squash_v1(u_hat, axis=3)-v_j)** 2).sum(3)
+			dd = 1 - ((squash_v1(u_hat, axis=3) - v_j) ** 2).sum(3)
 			b_ij = b_ij + dd
 	poses = v_j.squeeze(1)
 	activations = torch.sqrt((poses ** 2).sum(2))
@@ -473,16 +617,21 @@ class FlattenCaps(nn.Module):
 		super(FlattenCaps, self).__init__()
 
 	def forward(self, p, a):
-		poses = p.view(p.size(0), p.size(2) * p.size(3) * p.size(4), -1) # [batch size, dim_caps x num instances x .., num caps]
+		poses = p.view(
+			p.size(0), p.size(2) * p.size(3) * p.size(4), -1
+		)  # [batch size, dim_caps x num instances x .., num caps]
 
 		activations = a.view(a.size(0), a.size(1) * a.size(2) * a.size(3), -1)
 		return poses, activations
+
 
 class PrimaryCaps(nn.Module):
 	def __init__(self, num_capsules, in_channels, out_channels, kernel_size, stride):
 		super(PrimaryCaps, self).__init__()
 
-		self.capsules = nn.Conv1d(in_channels, out_channels * num_capsules, kernel_size, stride)
+		self.capsules = nn.Conv1d(
+			in_channels, out_channels * num_capsules, kernel_size, stride
+		)
 
 		torch.nn.init.xavier_uniform_(self.capsules.weight)
 
@@ -501,8 +650,17 @@ class PrimaryCaps(nn.Module):
 
 		return poses, activations
 
+
 class FCCaps(nn.Module):
-	def __init__(self, is_AKDE, output_capsule_num, input_capsule_num, in_channels, out_channels, KDE_epsilon=0.05):
+	def __init__(
+			self,
+			is_AKDE,
+			output_capsule_num,
+			input_capsule_num,
+			in_channels,
+			out_channels,
+			KDE_epsilon=0.05,
+	):
 		super(FCCaps, self).__init__()
 
 		self.in_channels = in_channels
@@ -510,7 +668,11 @@ class FCCaps(nn.Module):
 		self.input_capsule_num = input_capsule_num
 		self.output_capsule_num = output_capsule_num
 
-		self.W1 = nn.Parameter(torch.FloatTensor(1, input_capsule_num, output_capsule_num, out_channels, in_channels))
+		self.W1 = nn.Parameter(
+			torch.FloatTensor(
+				1, input_capsule_num, output_capsule_num, out_channels, in_channels
+			)
+		)
 		self.epsilon = KDE_epsilon
 		torch.nn.init.xavier_uniform_(self.W1)
 
@@ -527,26 +689,34 @@ class FCCaps(nn.Module):
 		W1 = W1.repeat(batch_size, 1, 1, 1, 1)
 		u_hat = torch.matmul(W1, x)
 
-		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num,  self.output_capsule_num, 1)).to(next(self.parameters()).device)
+		b_ij = Variable(
+			torch.zeros(batch_size, self.input_capsule_num, self.output_capsule_num, 1)
+		).to(next(self.parameters()).device)
 
 		if self.is_AKDE:
-			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat, epsilon=self.epsilon)
+			poses, activations = Adaptive_KDE_routing(
+				batch_size, b_ij, u_hat, epsilon=self.epsilon
+			)
 		else:
-			#poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
+			# poses, activations = dynamic_routing(batch_size, b_ij, u_hat, self.input_capsule_num)
 			poses, activations = KDE_routing(batch_size, b_ij, u_hat)
 		return poses, activations
 
 	def forward_smart(self, x, y, labels):
 		batch_size = x.size(0)
 		variable_output_capsule_num = len(labels)
-		W1 = self.W1[:,:,labels,:,:]
+		W1 = self.W1[:, :, labels, :, :]
 
 		x = torch.stack([x] * variable_output_capsule_num, dim=2).unsqueeze(4)
 
 		W1 = W1.repeat(batch_size, 1, 1, 1, 1)
 		u_hat = torch.matmul(W1, x)
 
-		b_ij = Variable(torch.zeros(batch_size, self.input_capsule_num, variable_output_capsule_num, 1)).to(next(self.parameters()).device)
+		b_ij = Variable(
+			torch.zeros(
+				batch_size, self.input_capsule_num, variable_output_capsule_num, 1
+			)
+		).to(next(self.parameters()).device)
 
 		if self.is_AKDE == True:
 			poses, activations = Adaptive_KDE_routing(batch_size, b_ij, u_hat)
@@ -556,7 +726,18 @@ class FCCaps(nn.Module):
 
 
 class CapsNet_Text(nn.Module):
-	def __init__(self, input_size, in_channels, num_classes, dim_caps, num_caps, num_compressed_caps, dropout_caps, lambda_reg_caps, KDE_epsilon):
+	def __init__(
+			self,
+			input_size,
+			in_channels,
+			num_classes,
+			dim_caps,
+			num_caps,
+			num_compressed_caps,
+			dropout_caps,
+			lambda_reg_caps,
+			KDE_epsilon,
+	):
 		super(CapsNet_Text, self).__init__()
 		self.num_classes = num_classes
 		self.dim_caps = dim_caps
@@ -565,37 +746,59 @@ class CapsNet_Text(nn.Module):
 		self.num_caps = num_caps
 		self.num_compressed_caps = num_compressed_caps
 
-		self.primary_capsules_doc = PrimaryCaps(num_capsules=num_caps, in_channels=in_channels, out_channels=dim_caps, kernel_size=input_size, stride=1)
+		self.primary_capsules_doc = PrimaryCaps(
+			num_capsules=num_caps,
+			in_channels=in_channels,
+			out_channels=dim_caps,
+			kernel_size=input_size,
+			stride=1,
+		)
 
 		self.flatten_capsules = FlattenCaps()
 
-		self.W_doc = nn.Parameter(torch.FloatTensor(num_caps, num_compressed_caps)) # 14272 --> doc_enc_dim * num_caps * dim_caps
+		self.W_doc = nn.Parameter(
+			torch.FloatTensor(num_caps, num_compressed_caps)
+		)  # 14272 --> doc_enc_dim * num_caps * dim_caps
 		torch.nn.init.xavier_uniform_(self.W_doc)
 
-		self.fc_capsules_doc_child = FCCaps(True, output_capsule_num=num_classes, input_capsule_num=num_compressed_caps,
-											in_channels=dim_caps, out_channels=dim_caps, KDE_epsilon=KDE_epsilon)
+		self.fc_capsules_doc_child = FCCaps(
+			True,
+			output_capsule_num=num_classes,
+			input_capsule_num=num_compressed_caps,
+			in_channels=dim_caps,
+			out_channels=dim_caps,
+			KDE_epsilon=KDE_epsilon,
+		)
 
 		self.drop = nn.Dropout2d(p=dropout_caps)
 
 		# DOC RECONSTRUCTOR
-		self.recon_error_lambda = lambda_reg_caps # factor to scale down reconstruction loss with
+		self.recon_error_lambda = (
+			lambda_reg_caps  # factor to scale down reconstruction loss with
+		)
 		self.rescale = nn.Parameter(torch.Tensor([7]))
-		reconstruction_size = 800 #TODO: change
-		self.reconstruct0 = nn.Linear(dim_caps * num_classes, int((reconstruction_size * 2) / 3))
-		self.reconstruct1 = nn.Linear(int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2))
-		self.reconstruct2 = nn.Linear(int((reconstruction_size * 3) / 2), reconstruction_size)
+		reconstruction_size = 800  # TODO: change
+		self.reconstruct0 = nn.Linear(
+			dim_caps * num_classes, int((reconstruction_size * 2) / 3)
+		)
+		self.reconstruct1 = nn.Linear(
+			int((reconstruction_size * 2) / 3), int((reconstruction_size * 3) / 2)
+		)
+		self.reconstruct2 = nn.Linear(
+			int((reconstruction_size * 3) / 2), reconstruction_size
+		)
 
 		# init linear layers
-		torch.nn.init.kaiming_normal_(self.reconstruct0.weight, mode='fan_in')
-		torch.nn.init.kaiming_normal_(self.reconstruct1.weight, mode='fan_in')
-		torch.nn.init.kaiming_normal_(self.reconstruct1.weight, mode='fan_in')
+		torch.nn.init.kaiming_normal_(self.reconstruct0.weight, mode="fan_in")
+		torch.nn.init.kaiming_normal_(self.reconstruct1.weight, mode="fan_in")
+		torch.nn.init.kaiming_normal_(self.reconstruct1.weight, mode="fan_in")
 
 		self.relu = nn.ReLU(inplace=True)
 		self.sigmoid = nn.Sigmoid()
 
 	def compression(self, poses, W):
 
-		poses = torch.matmul(poses.permute(0,2,1), W).permute(0,2,1)
+		poses = torch.matmul(poses.permute(0, 2, 1), W).permute(0, 2, 1)
 		activations = torch.sqrt((poses ** 2).sum(2))
 		return poses, activations
 
@@ -611,7 +814,9 @@ class CapsNet_Text(nn.Module):
 		poses, activations = self.fc_capsules_doc_child(poses.squeeze())
 		return poses, activations
 
-	def forward_old(self, data, labels): # Use when second model is used to limit label space to route for caps net
+	def forward_old(
+			self, data, labels
+	):  # Use when second model is used to limit label space to route for caps net
 		# labels arg is preliminary prediction by other model
 		data = self.embed(data)
 		nets_doc_l = []
@@ -622,13 +827,16 @@ class CapsNet_Text(nn.Module):
 		poses_doc, activations_doc = self.primary_capsules_doc(nets_doc)
 		poses, activations = self.flatten_capsules(poses_doc, activations_doc)
 		poses, activations = self.compression(poses, self.W_doc)
-		poses, activations = self.fc_capsules_doc_child(poses, activations, labels) #parallel model is used for restricting solution space
+		poses, activations = self.fc_capsules_doc_child(
+			poses, activations, labels
+		)  # parallel model is used for restricting solution space
 		# poses = poses.unsqueeze(2)
 		return poses, activations
 
 	def reconstruction_loss(self, doc_enc, input, size_average=True):
 		# Simply return 0 when no reconstruction loss is considered
-		if self.recon_error_lambda == 0: return 0
+		if self.recon_error_lambda == 0:
+			return 0
 		# Get the lengths of capsule outputs.
 		# input = self.bn(input)
 		v_mag = torch.sqrt((input ** 2).sum(dim=2))
@@ -646,7 +854,9 @@ class CapsNet_Text(nn.Module):
 
 			# Copy only the maximum capsule index from this batch sample.
 			# This masks out (leaves as zero) the other capsules in this sample.
-			batch_masked = Variable(torch.zeros(input_batch.size())).to(next(self.parameters()).device)
+			batch_masked = Variable(torch.zeros(input_batch.size())).to(
+				next(self.parameters()).device
+			)
 			batch_masked[v_max_index[batch_idx]] = input_batch[v_max_index[batch_idx]]
 			all_masked[batch_idx] = batch_masked
 
@@ -662,7 +872,7 @@ class CapsNet_Text(nn.Module):
 
 		# The reconstruction loss is the sum squared difference between the input image and reconstructed image.
 		# Multiplied by a small number so it doesn't dominate the margin (class) loss.
-		error = (output - doc_enc)
+		error = output - doc_enc
 		error = error ** 2
 		error = torch.sum(error, dim=1) * self.recon_error_lambda
 
@@ -677,8 +887,8 @@ class CapsNet_Text(nn.Module):
 # EXPERIMENT: Capsule Transformer
 ###################################################################################################
 
-class TransformerCapsEncoderLayer(nn.Module):
 
+class TransformerCapsEncoderLayer(nn.Module):
 	def __init__(self, d_model, out_size, nhead, dim_feedforward=50, dropout=0.1):
 		super(TransformerCapsEncoderLayer, self).__init__()
 		self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
@@ -688,7 +898,14 @@ class TransformerCapsEncoderLayer(nn.Module):
 		#         # self.linear2 = Linear(dim_feedforward, d_model)
 		self.d_model = d_model
 		self.out_size = out_size
-		self.feedforward_caps = CapsNet_Text(d_model, 1, out_size, dim_caps=12, num_caps=8, num_compressed_caps=dim_feedforward)
+		self.feedforward_caps = CapsNet_Text(
+			d_model,
+			1,
+			out_size,
+			dim_caps=12,
+			num_caps=8,
+			num_compressed_caps=dim_feedforward,
+		)
 		self.scaling_param = nn.Parameter(torch.tensor([1e-8]))
 
 		self.norm1 = nn.LayerNorm(d_model)
@@ -707,16 +924,17 @@ class TransformerCapsEncoderLayer(nn.Module):
 		Shape:
 			see the docs in Transformer class.
 		"""
-		src2 = self.self_attn(src, src, src, attn_mask=src_mask,
-							  key_padding_mask=src_key_padding_mask)[0]
+		src2 = self.self_attn(
+			src, src, src, attn_mask=src_mask, key_padding_mask=src_key_padding_mask
+		)[0]
 		src = src + self.dropout1(src2)
 		src = self.norm1(src)
 		B, N, d_c = src.size()
-		src = src.view(-1,1,self.d_model)
+		src = src.view(-1, 1, self.d_model)
 		_, src2 = self.feedforward_caps(src)
-		src = self.dropout2(src2.squeeze(2)).view(B,N,self.out_size)
+		src = self.dropout2(src2.squeeze(2)).view(B, N, self.out_size)
 
-		src = torch.log(src+self.scaling_param/(1-src+self.scaling_param))
+		src = torch.log(src + self.scaling_param / (1 - src + self.scaling_param))
 		src = self.norm2(src)
 
 		# src = src * torch.pow(10, self.scaling_param)
