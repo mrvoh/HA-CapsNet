@@ -11,7 +11,7 @@ except:
     print("WARNING: Fasttext module not loaded.")
 transpose = lambda b: b.t_().squeeze(0).contiguous()
 
-ULMFIT_OUT_SIZE = 400
+ULMFIT_OUT_SIZE = 800
 
 
 class FastTextLearner:
@@ -413,8 +413,8 @@ class HierarchicalAttentionCapsNet(nn.Module):
     def __init__(
         self,
         num_tokens,
-        embed_size,
-        word_hidden,
+        # embed_size,
+        # word_hidden,
         num_classes,
         bidirectional=True,
         dropout=0.1,
@@ -436,11 +436,11 @@ class HierarchicalAttentionCapsNet(nn.Module):
 
         # self.batch_size = batch_size
         self.n_classes = num_classes
-        self.word_hidden = word_hidden
+        # self.word_hidden = word_hidden
         self.bidirectional = bidirectional
         self.word_contextualizer = word_encoder
         self.lambda_reg_caps = lambda_reg_caps
-
+        word_hidden = 1
         if word_encoder.lower() == "ulmfit":
             word_out = ULMFIT_OUT_SIZE  # static ULMFiT value
         else:
@@ -451,16 +451,21 @@ class HierarchicalAttentionCapsNet(nn.Module):
             )
         sent_out = word_out
 
-        self.sent_encoder = AttentionWordEncoder(
-            word_encoder,
+        # self.sent_encoder = AttentionWordEncoder(
+        #     word_encoder,
+        #     num_tokens,
+        #     embed_size,
+        #     word_hidden,
+        #     bidirectional=bidirectional,
+        #     num_layers=num_layers_word,
+        #     nhead=nhead_word,
+        #     ulmfit_pretrained_path=ulmfit_pretrained_path,
+        #     dropout_factor_ulmfit=dropout_factor_ulmfit,
+        # )
+        self.sent_encoder = ULMFiTEncoder(
+            ulmfit_pretrained_path,
             num_tokens,
-            embed_size,
-            word_hidden,
-            bidirectional=bidirectional,
-            num_layers=num_layers_word,
-            nhead=nhead_word,
-            ulmfit_pretrained_path=ulmfit_pretrained_path,
-            dropout_factor_ulmfit=dropout_factor_ulmfit,
+            dropout_factor_ulmfit
         )
         self.doc_encoder = MultiHeadSelfAttention(
             input_dim=word_out,
@@ -500,6 +505,7 @@ class HierarchicalAttentionCapsNet(nn.Module):
             }
         )
 
+
         return params
 
     def forward(self, sents, encoding=None):
@@ -508,7 +514,9 @@ class HierarchicalAttentionCapsNet(nn.Module):
         sents = sents.view(-1, sen_len)
 
         # Encode sentences
-        sen_encodings, word_attn_weight = self.sent_encoder(sents)
+        # sen_encodings, word_attn_weight = self.sent_encoder(sents)
+        word_attn_weight = None
+        sen_encodings = self.sent_encoder.encode(sents)
 
         sen_encodings = sen_encodings.view(n_doc, n_sents, -1)  #
         # Encode documents

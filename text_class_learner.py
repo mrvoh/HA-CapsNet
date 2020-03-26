@@ -299,8 +299,8 @@ class TextClassificationLearner:
         elif self.model_name.lower() == "HierarchicalAttentionCapsNet".lower():
             self.model = HierarchicalAttentionCapsNet(
                 num_tokens=self.vocab_size,
-                embed_size=embed_dim,
-                word_hidden=word_hidden,
+                # embed_size=embed_dim,
+                # word_hidden=word_hidden,
                 num_classes=self.num_labels,
                 dropout=dropout,
                 word_encoder=word_encoder,
@@ -349,24 +349,25 @@ class TextClassificationLearner:
             # intialize per-layer lr for ULMFiT
             params = [
                 {
-                    "params": self.model.sent_encoder.word_encoder.parameters(),
+                    "params": self.model.sent_encoder.parameters(),
                     "lr": self.lr / self.lr_div_factor,
                 },
                 {"params": self.model.caps_classifier.parameters()},
                 {"params": self.model.doc_encoder.parameters()},
-                {"params": self.model.sent_encoder.weight_W_word.parameters()},
-                {"params": self.model.sent_encoder.weight_proj_word},
+                # {"params": self.model.sent_encoder.weight_W_word.parameters()},
+                # {"params": self.model.sent_encoder.weight_proj_word},
             ]
 
-        # self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
-        self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
+        self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
+        # self.optimizer = torch.optim.SGD(params, lr=self.lr, nesterov=True, momentum=)
+        # self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
 
-        self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
-            self.optimizer,
-            num_warmup_steps=self.steps_per_epoch,
-            num_training_steps=self.steps_per_epoch * self.num_epochs,
-            num_cycles=self.num_cycles_lr,
-        )
+        # self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+        #     self.optimizer,
+        #     num_warmup_steps=self.steps_per_epoch,
+        #     num_training_steps=self.steps_per_epoch * self.num_epochs,
+        #     num_cycles=self.num_cycles_lr,
+        # )
 
         if self.keep_ulmfit_frozen:  # Freeze ulmfit completely
             self.model.sent_encoder.word_encoder.freeze_to(-1)
@@ -488,7 +489,7 @@ class TextClassificationLearner:
                 and self.gradual_unfreeze
                 and not self.keep_ulmfit_frozen
             ):
-                self.model.sent_encoder.word_encoder.freeze_to(epoch)
+                self.model.sent_encoder.freeze_to(epoch)
 
             # continue
             best_score, best_loss, train_step = self._train_epoch(
@@ -522,7 +523,7 @@ class TextClassificationLearner:
 
         for batch_idx, batch in enumerate(dataloader_train):
             torch.cuda.empty_cache()
-            self.scheduler.step()
+            # self.scheduler.step()
             train_step += 1
             optimizer.zero_grad()
 
@@ -552,11 +553,11 @@ class TextClassificationLearner:
             loss += rec_loss
             tr_loss += loss.item()
 
-            if APEX_AVAILABLE:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            # if APEX_AVAILABLE:
+            #     with amp.scale_loss(loss, optimizer) as scaled_loss:
+            #         scaled_loss.backward()
+            # else:
+            loss.backward()
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             optimizer.step()

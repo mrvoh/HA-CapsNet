@@ -80,6 +80,11 @@ class ULMFiTEncoder(nn.Module):
 	def __init__(self, pretrained_path, num_tokens, dropout_factor):
 		super(ULMFiTEncoder, self).__init__()
 		# state_dict = torch.loa
+
+		self.pretrained_path = pretrained_path
+		self.num_tokens = num_tokens
+		self.dropout_factor = dropout_factor
+
 		config = {
 			"emb_sz": 400,
 			"n_hid": 1150,
@@ -100,7 +105,6 @@ class ULMFiTEncoder(nn.Module):
 		sd = torch.load(pretrained_path, map_location=lambda storage, loc: storage)
 		lm.load_state_dict(sd)
 
-		self.ln = nn.LayerNorm(config["emb_sz"])
 		self.ulmfit = lm
 
 		self.layer_map = stop_map = {
@@ -109,6 +113,15 @@ class ULMFiTEncoder(nn.Module):
 			2: 6,  # lstm layer 1
 			3: 0,  # all
 		}
+
+	def get_init_params(self):
+
+		params = {
+			"ulmfit_pretrained_path": self.pretrained_path,
+			"ulmfit_dropout_factor": self.dropout_factor
+		}
+
+		return params
 
 	def get_layer_params(self, l):
 
@@ -179,7 +192,7 @@ class ULMFiTEncoder(nn.Module):
 
 		x1 = h[-1]  # final hidden state
 
-		x1 = self.ln(x1)
+		# x1 = self.ln(x1)
 
 		return x1
 
