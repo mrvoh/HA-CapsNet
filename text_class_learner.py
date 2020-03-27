@@ -552,11 +552,11 @@ class TextClassificationLearner:
             loss += rec_loss
             tr_loss += loss.item()
 
-            if APEX_AVAILABLE:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            # if APEX_AVAILABLE:
+            #     with amp.scale_loss(loss, optimizer) as scaled_loss:
+            #         scaled_loss.backward()
+            # else:
+            loss.backward()
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             optimizer.step()

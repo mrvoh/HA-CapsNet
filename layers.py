@@ -629,9 +629,13 @@ class PrimaryCaps(nn.Module):
 	def __init__(self, num_capsules, in_channels, out_channels, kernel_size, stride):
 		super(PrimaryCaps, self).__init__()
 
+		# self.capsules = nn.Conv1d(
+		# 	in_channels, out_channels * num_capsules, kernel_size, stride
+		# )
 		self.capsules = nn.Conv1d(
-			in_channels, out_channels * num_capsules, kernel_size, stride
+			kernel_size, out_channels * num_capsules, in_channels, stride
 		)
+
 
 		torch.nn.init.xavier_uniform_(self.capsules.weight)
 
