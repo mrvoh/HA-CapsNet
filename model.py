@@ -522,7 +522,7 @@ class HierarchicalAttentionCapsNet(nn.Module):
         # Encode documents
         doc_encoding, sent_attn_weight = self.doc_encoder(sen_encodings)
         # Classify with capsule net
-        poses, activations = self.caps_classifier(doc_encoding.permute(0, 2, 1))
+        poses, activations = self.caps_classifier(doc_encoding) #.permute(0, 2, 1))
         activations = activations.squeeze(2)
 
         if encoding is None:
