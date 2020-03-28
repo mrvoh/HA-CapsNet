@@ -37,7 +37,7 @@ def set_params(params, config_path):
     for param in [
         "num_compressed_caps",
         "min_freq_word",
-        "num_cycles_lr"
+        # "num_cycles_lr"
     ]:
         params[param] = int(params[param])
     # reads in config file and overwrites params for optimization
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         "dropout_factor": hp.uniform("dropout_factor", 1.0, 3.0),
         "num_compressed_caps": hp.quniform("num_compressed_caps", 5, 60, 5),
         "min_freq_word": hp.quniform("min_freq_word", 1, 50, 1),
-        "num_cycles_lr": hp.quniform("num_cycles_lr", 1, 10, 1),
+        # "num_cycles_lr": hp.quniform("num_cycles_lr", 1, 10, 1),
         "lr_div_factor": hp.uniform("lr_div_factor", 1, 20),
         # "num_head_doc":hp.quniform("num_head_doc", 1, 5, 1)
     }
