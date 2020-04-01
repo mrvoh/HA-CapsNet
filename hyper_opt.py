@@ -119,7 +119,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--preload_trials",
-        action="store_false",
+        action="store_true",
         help="Whether to preload an existing trials object.",
     )
     parser.add_argument(
