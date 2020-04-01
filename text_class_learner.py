@@ -1,6 +1,6 @@
 # from torchnlp.word_to_vector import FastText
 import torch
-import torch.optim as optim
+from ranger import Ranger
 from torch.utils.tensorboard import SummaryWriter
 
 from model import HAN, HGRULWAN, HCapsNet, HierarchicalAttentionCapsNet, MyDataParallel
@@ -358,15 +358,20 @@ class TextClassificationLearner:
                 {"params": self.model.sent_encoder.weight_proj_word},
             ]
 
-        # self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
-        self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
-
-        self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+        self.optimizer = Ranger(params, lr=self.lr, betas=(0.95,0.99), eps=1e-6)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
-            num_warmup_steps=self.steps_per_epoch,
-            num_training_steps=self.steps_per_epoch * self.num_epochs,
-            num_cycles=self.num_cycles_lr,
+            T_max=self.steps_per_epoch * self.num_epochs
         )
+        # self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
+        # self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
+        #
+        # self.scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
+        #     self.optimizer,
+        #     num_warmup_steps=self.steps_per_epoch,
+        #     num_training_steps=self.steps_per_epoch * self.num_epochs,
+        #     num_cycles=self.num_cycles_lr,
+        # )
 
         if self.keep_ulmfit_frozen:  # Freeze ulmfit completely
             self.model.sent_encoder.word_encoder.freeze_to(-1)
@@ -552,11 +557,11 @@ class TextClassificationLearner:
             loss += rec_loss
             tr_loss += loss.item()
 
-            if APEX_AVAILABLE:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+            # if APEX_AVAILABLE:
+            #     with amp.scale_loss(loss, optimizer) as scaled_loss:
+            #         scaled_loss.backward()
+            # else:
+            loss.backward()
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             optimizer.step()
