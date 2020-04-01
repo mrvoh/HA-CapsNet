@@ -119,7 +119,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--preload_trials",
-        action="store_true",
+        action="store_false",
         help="Whether to preload an existing trials object.",
     )
     parser.add_argument(
@@ -152,21 +152,21 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--train_path",
-        default=os.path.join("dataset", "trec", "train.pkl"),
+        default=os.path.join("dataset", "reuters", "train.pkl"),
         type=str,
         required=False,
         help="The path where to dump logging.",
     )
     parser.add_argument(
         "--test_path",
-        default=os.path.join("dataset", "trec", "dev.pkl"),
+        default=os.path.join("dataset", "reuters", "dev.pkl"),
         type=str,
         required=False,
         help="The path where to dump logging.",
     )
     parser.add_argument(
         "--label_to_idx_path",
-        default=os.path.join("dataset", "trec", "label_to_idx.json"),
+        default=os.path.join("dataset", "reuters", "label_to_idx.json"),
         type=str,
         required=False,
         help="The path where to dump logging.",

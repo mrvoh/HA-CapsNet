@@ -82,7 +82,7 @@ class ULMFiTEncoder(nn.Module):
 		# state_dict = torch.loa
 		config = {
 			"emb_sz": 400,
-			"n_hid": 1152,
+			"n_hid": 1150,
 			"n_layers": 3,
 			"pad_token": 1,
 			"qrnn": False,

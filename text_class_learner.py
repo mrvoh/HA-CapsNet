@@ -359,7 +359,10 @@ class TextClassificationLearner:
             ]
 
         self.optimizer = Ranger(params, lr=self.lr, betas=(0.95,0.99), eps=1e-6)
-        # self.scheduler = torch.optim.lr_scheduler.
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer,
+            T_max=self.steps_per_epoch * self.num_epochs
+        )
         # self.optimizer = RAdam(params, lr=self.lr, weight_decay=self.weight_decay)
         # self.optimizer = AdamW(params, lr=self.lr, weight_decay=self.weight_decay)
         #
@@ -524,7 +527,7 @@ class TextClassificationLearner:
 
         for batch_idx, batch in enumerate(dataloader_train):
             torch.cuda.empty_cache()
-            # self.scheduler.step()
+            self.scheduler.step()
             train_step += 1
             optimizer.zero_grad()
 
